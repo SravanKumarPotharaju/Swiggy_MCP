@@ -121,3 +121,8 @@ async def root(request: Request):
         },
         "message": f"Welcome to {settings.APP_NAME}",
     }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(str(STATIC_DIR / "favicon.svg"), media_type="image/svg+xml")

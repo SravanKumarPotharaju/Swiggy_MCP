@@ -1,14 +1,24 @@
-"""The served UI shell: no pre-filled personal data and one cache-buster version for local assets."""
+"""The served UI shell: no pre-filled personal data, one cache-buster version for local assets, and its favicon."""
 
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+from fastapi.testclient import TestClient
+
+from app.main import app
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "static"
 
 PERSONAL_PHONE = "9390787901"
 TEXT_SUFFIXES = {".py", ".js", ".html", ".css", ".svg", ".json"}
+
+FAVICON = STATIC / "favicon.svg"
+TOKENS = STATIC / "css" / "rally-tokens.css"
+HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}\b")
+RALLY_INK, RALLY_BLUE = "#101010", "#276EF1"
 
 
 class TagCollector(HTMLParser):
@@ -24,6 +34,10 @@ def shell_tags():
     collector = TagCollector()
     collector.feed((STATIC / "index.html").read_text(encoding="utf-8"))
     return collector.tags
+
+
+def hex_colors(path):
+    return {color.upper() for color in HEX_COLOR.findall(path.read_text(encoding="utf-8"))}
 
 
 def local_asset_refs():
@@ -69,3 +83,31 @@ def test_local_assets_share_one_cache_buster_version():
     assert refs
     assert len(versions) == 1, f"mixed or missing ?v= across {refs}"
     assert None not in versions
+
+
+def test_shell_links_the_svg_favicon_and_it_is_served():
+    icons = [attrs for tag, attrs in shell_tags() if tag == "link" and attrs.get("rel") == "icon"]
+
+    assert len(icons) == 1
+    assert icons[0]["type"] == "image/svg+xml"
+    assert icons[0]["href"].split("?")[0] == "/static/favicon.svg"
+
+    res = TestClient(app).get(icons[0]["href"])
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("image/svg+xml")
+
+
+def test_favicon_svg_is_drawn_in_rally_ink_and_blue_only():
+    assert FAVICON.is_file()
+
+    colors = hex_colors(FAVICON)
+    assert colors == {RALLY_INK, RALLY_BLUE}
+    assert colors <= hex_colors(TOKENS)
+
+
+def test_favicon_ico_is_served_so_browsers_do_not_404():
+    res = TestClient(app).get("/favicon.ico")
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("image/svg+xml")
+    assert res.content == FAVICON.read_bytes()
