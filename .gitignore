@@ -35,3 +35,14 @@ wheels/
 *.swo
 .DS_Store
 .pytest_cache/
+.heimdall/verdict.json
+.heimdall/receipts/
+.heimdall/audit.json
+
+# heimdall team secret — gitignored on a PUBLIC/unverified repo: a bearer
+# secret must never be committed to a world-readable repo. Grow the team
+# out-of-band with `hmd invite`.
+.heimdall/team.json
+
+# Rally fonts — UberMove is proprietary (internal use only); kept local until licensing is confirmed
+static/fonts/
