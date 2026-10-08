@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from app.db.database import get_db, get_redis
 from app.core.logging import logger
 
