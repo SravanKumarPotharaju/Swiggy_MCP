@@ -8,6 +8,8 @@ from app.schemas.order import (
 from app.mcp.exceptions import MCPAuthenticationError, MCPConnectionError, MCPToolError
 from app.schemas.common import APIResponse
 
+from app.core.dependencies import get_current_user_id
+
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
@@ -21,8 +23,9 @@ async def checkout(
     Returns orderId, paasId, payment amount, and UPI Intent / QR payload.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        data = await order_service.checkout(body)
+        data = await order_service.checkout(body, user_id=user_id)
         return APIResponse(
             success=True,
             data=data.model_dump(),
@@ -84,11 +87,13 @@ async def get_orders(
     Phase 13: Fetch order history and active orders.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
         data = await order_service.get_orders(
             active_only=active_only,
             count=count,
             address_id=address_id,
+            user_id=user_id,
         )
         return APIResponse(
             success=True,
@@ -114,11 +119,12 @@ async def get_frequent_orders(
     Also returns raw counts_by_restaurant so UI components can evaluate custom thresholds (e.g. > 2).
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     if hasattr(threshold, "default"):
         threshold = threshold.default
     threshold = int(threshold)
     try:
-        data = await order_service.get_orders(count=15)
+        data = await order_service.get_orders(count=15, user_id=user_id)
         rest_counts = {}
         im_order_count = 0
         for o in data.orders:

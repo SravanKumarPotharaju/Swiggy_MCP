@@ -17,6 +17,8 @@ from app.schemas.instamart import (
     InstamartConfirmOrderRequest,
 )
 
+from app.core.dependencies import get_current_user_id
+
 router = APIRouter(prefix="/instamart", tags=["Instamart"])
 
 
@@ -29,8 +31,9 @@ async def get_instamart_addresses(request: Request):
     Internally calls `get_addresses` on https://mcp.swiggy.com/im.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        response_data = await instamart_service.get_addresses(user_id="user_default")
+        response_data = await instamart_service.get_addresses(user_id=user_id)
         return APIResponse(
             success=True,
             data=response_data.model_dump(),
@@ -63,6 +66,7 @@ async def search_instamart_products(
     from app.mcp.exceptions import AddressNotServiceableError
 
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     clean_query = query.strip()
     if not clean_query:
         raise HTTPException(status_code=400, detail="Search query must not be empty.")
@@ -73,7 +77,7 @@ async def search_instamart_products(
             address_id=address_id,
             limit=limit,
             category=category,
-            user_id="user_default",
+            user_id=user_id,
         )
         return APIResponse(
             success=True,
@@ -124,10 +128,11 @@ async def get_instamart_go_to_items(
     from app.mcp.exceptions import AddressNotServiceableError
 
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
         results = await instamart_service.get_go_to_items(
             address_id=address_id,
-            user_id="user_default",
+            user_id=user_id,
         )
         return APIResponse(
             success=True,
@@ -171,8 +176,9 @@ async def get_instamart_cart(request: Request):
     Phase 8: Fetches current Instamart cart and bill breakdown.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        cart = await instamart_service.get_cart(user_id="user_default")
+        cart = await instamart_service.get_cart(user_id=user_id)
         return APIResponse(
             success=True,
             data=cart.model_dump(),
@@ -209,11 +215,12 @@ async def update_instamart_cart(
     from app.mcp.exceptions import AddressNotServiceableError
 
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
         cart = await instamart_service.update_cart(
             items=body.items,
             address_id=body.address_id,
-            user_id="user_default",
+            user_id=user_id,
         )
         return APIResponse(
             success=True,
@@ -261,13 +268,14 @@ async def add_or_update_cart_item(
     while preserving other existing items.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
         cart = await instamart_service.add_or_update_item(
             spin_id=body.spinId,
             quantity_delta=body.quantity_delta or (1 if body.quantity is None else 0),
             absolute_quantity=body.quantity,
             address_id=body.address_id,
-            user_id="user_default",
+            user_id=user_id,
         )
         return APIResponse(
             success=True,
@@ -304,8 +312,9 @@ async def clear_instamart_cart(request: Request):
     Phase 8: Clears all items from the Instamart cart.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        res = await instamart_service.clear_cart(user_id="user_default")
+        res = await instamart_service.clear_cart(user_id=user_id)
         return APIResponse(
             success=True,
             data=res,

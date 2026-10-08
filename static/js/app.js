@@ -16,23 +16,56 @@ let state = {
 // Immediately restore persisted state from localStorage
 try {
   const savedFoodCart = localStorage.getItem('smartflow_food_cart');
-  if (savedFoodCart) state.cart = JSON.parse(savedFoodCart);
+  if (savedFoodCart) {
+    const parsed = JSON.parse(savedFoodCart);
+    if (parsed && !parsed.is_empty && parsed.items && parsed.items.length > 0) {
+      state.cart = parsed;
+    } else {
+      localStorage.removeItem('smartflow_food_cart');
+    }
+  }
 } catch (e) {}
 
 try {
   const savedImCart = localStorage.getItem('smartflow_instamart_cart');
-  if (savedImCart) state.instamartCart = JSON.parse(savedImCart);
+  if (savedImCart) {
+    const parsed = JSON.parse(savedImCart);
+    if (parsed && !parsed.is_empty && parsed.items && parsed.items.length > 0) {
+      state.instamartCart = parsed;
+    } else {
+      localStorage.removeItem('smartflow_instamart_cart');
+    }
+  }
 } catch (e) {}
 
 try {
   const savedActiveOrder = localStorage.getItem('smartflow_active_order');
-  if (savedActiveOrder) state.activeOrder = JSON.parse(savedActiveOrder);
-} catch (e) {}
+  if (savedActiveOrder) {
+    const parsed = JSON.parse(savedActiveOrder);
+    if (parsed && parsed.order_id && parsed.is_active && !parsed.is_demo &&
+        !['delivered', 'cancelled', 'completed'].includes((parsed.order_status || parsed.status || '').toLowerCase())) {
+      state.activeOrder = parsed;
+    } else {
+      localStorage.removeItem('smartflow_active_order');
+      state.activeOrder = null;
+    }
+  }
+} catch (e) {
+  state.activeOrder = null;
+}
 
 function persistCarts() {
   try {
-    if (state.cart) localStorage.setItem('smartflow_food_cart', JSON.stringify(state.cart));
-    if (state.instamartCart) localStorage.setItem('smartflow_instamart_cart', JSON.stringify(state.instamartCart));
+    if (state.cart && !state.cart.is_empty && state.cart.items && state.cart.items.length > 0) {
+      localStorage.setItem('smartflow_food_cart', JSON.stringify(state.cart));
+    } else {
+      localStorage.removeItem('smartflow_food_cart');
+    }
+    if (state.instamartCart && !state.instamartCart.is_empty && state.instamartCart.items && state.instamartCart.items.length > 0) {
+      localStorage.setItem('smartflow_instamart_cart', JSON.stringify(state.instamartCart));
+    } else {
+      localStorage.removeItem('smartflow_instamart_cart');
+    }
   } catch (e) {}
 }
 
@@ -306,11 +339,17 @@ async function loadInitialState() {
     if (res.success && res.data) {
       state.defaultAddress = res.data.default_address;
       state.savedAddresses = res.data.all_addresses || [];
-      if (res.data.cart) {
+      if (res.data.cart && !res.data.cart.is_empty && res.data.cart.items && res.data.cart.items.length > 0) {
         state.cart = res.data.cart;
+      } else {
+        state.cart = { items: [], item_count: 0, is_empty: true, pricing: null };
+        localStorage.removeItem('smartflow_food_cart');
       }
-      if (res.data.instamart_cart) {
+      if (res.data.instamart_cart && !res.data.instamart_cart.is_empty && res.data.instamart_cart.items && res.data.instamart_cart.items.length > 0) {
         state.instamartCart = res.data.instamart_cart;
+      } else {
+        state.instamartCart = { items: [], total_items: 0, is_empty: true, total_amount: '₹0' };
+        localStorage.removeItem('smartflow_instamart_cart');
       }
       persistCarts();
 
@@ -823,16 +862,6 @@ function setupVoice() {
   micBtn.addEventListener('click', () => {
     voice.toggleListening();
   });
-
-  // Call my phone button
-  const callBtn = document.getElementById('btn-call-phone');
-  if (callBtn) {
-    callBtn.addEventListener('click', async () => {
-      showToast('📞 Calling your mobile (+91 9390787901)...');
-      showIncomingCallModal('SmartFlow AI Concierge', '+91 9390787901');
-      api.triggerAutomatedCall().catch((e) => console.warn('Twilio call:', e));
-    });
-  }
 }
 
 // --- CHAT SYSTEM ---
@@ -1632,31 +1661,86 @@ function setupModals() {
   });
 
   // Setup Direct UPI Apps Buttons
-  const getUpiUrl = () => {
-    if (state.activeOrder && (state.activeOrder.upi_intent_url || state.activeOrder.upi_qr_data)) {
-      return state.activeOrder.upi_intent_url || state.activeOrder.upi_qr_data;
-    }
+  const getUpiDetails = () => {
     const rawAmt = state.activeCartType === 'instamart'
       ? (state.instamartCart ? state.instamartCart.total_amount : '58')
       : (state.cart && state.cart.pricing ? state.cart.pricing.to_pay : 422);
     const cleanAmt = String(rawAmt).replace(/₹/g, '').trim();
+    const orderId = (state.activeOrder && state.activeOrder.order_id) || '250370896157626';
     const vpa = '9390787901@upi';
-    const pn = state.activeCartType === 'instamart' ? 'SwiggyInstamart' : 'MeghanaFoods';
-    return `upi://pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR`;
+    const pn = encodeURIComponent(state.activeCartType === 'instamart' ? 'Swiggy Instamart' : 'Meghana Foods');
+    const note = encodeURIComponent(`Swiggy Order ${orderId}`);
+    return { cleanAmt, orderId, vpa, pn, note };
   };
 
   const launchUpiApp = (appName) => {
-    const upiUrl = getUpiUrl();
-    showToast(`📲 Opening ${appName}... Scan the QR code or tap 'I Have Paid' after transfer.`);
+    const { cleanAmt, orderId, vpa, pn, note } = getUpiDetails();
+    let url = `upi://pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR&tr=${orderId}&tn=${note}`;
+
+    if (appName === 'PhonePe') {
+      url = `phonepe://pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR&tr=${orderId}&tn=${note}`;
+    } else if (appName === 'Google Pay') {
+      url = `tez://upi/pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR&tr=${orderId}&tn=${note}`;
+    } else if (appName === 'Paytm') {
+      url = `paytmmp://pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR&tr=${orderId}&tn=${note}`;
+    } else if (appName === 'CRED') {
+      url = `cred://pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR&tr=${orderId}&tn=${note}`;
+    }
+
+    showToast(`📲 Opening ${appName}... Complete ₹${cleanAmt} payment and return here to track order!`);
+
+    state.pendingUpiAppLaunch = {
+      appName,
+      timestamp: Date.now(),
+      orderId,
+    };
+
     try {
-      window.location.href = upiUrl;
-    } catch (e) {}
+      window.location.href = url;
+    } catch (e) {
+      console.warn('Intent redirect notice:', e);
+    }
+
+    // Fallback to standard upi:// scheme after a short moment if specific app scheme is unsupported
+    setTimeout(() => {
+      if (document.hasFocus() && appName !== 'UPI') {
+        const fallbackUrl = `upi://pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR&tr=${orderId}&tn=${note}`;
+        window.location.href = fallbackUrl;
+      }
+    }, 1200);
   };
 
-  document.getElementById('btn-pay-gpay')?.addEventListener('click', () => launchUpiApp('Google Pay'));
   document.getElementById('btn-pay-phonepe')?.addEventListener('click', () => launchUpiApp('PhonePe'));
+  document.getElementById('btn-pay-gpay')?.addEventListener('click', () => launchUpiApp('Google Pay'));
   document.getElementById('btn-pay-paytm')?.addEventListener('click', () => launchUpiApp('Paytm'));
   document.getElementById('btn-pay-cred')?.addEventListener('click', () => launchUpiApp('CRED'));
+  document.getElementById('btn-pay-universal')?.addEventListener('click', () => launchUpiApp('UPI'));
+
+  // Toggle QR accordion
+  const toggleQrBtn = document.getElementById('btn-toggle-qr');
+  const qrBody = document.getElementById('qr-content-body');
+  const qrArrow = document.getElementById('qr-toggle-arrow');
+  if (toggleQrBtn && qrBody) {
+    toggleQrBtn.addEventListener('click', () => {
+      const isHidden = qrBody.style.display === 'none';
+      qrBody.style.display = isHidden ? 'block' : 'none';
+      if (qrArrow) qrArrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+    });
+  }
+
+  // Auto-detect return from payment app
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.pendingUpiAppLaunch) {
+      const elapsed = Date.now() - state.pendingUpiAppLaunch.timestamp;
+      if (elapsed > 4000) {
+        showToast('🔄 Received payment from UPI app! Activating live order tracking...');
+        setTimeout(() => {
+          handleFinalCheckout();
+        }, 1000);
+      }
+      state.pendingUpiAppLaunch = null;
+    }
+  });
 
   // Copy UPI ID button
   document.getElementById('btn-copy-upi')?.addEventListener('click', () => {
@@ -1853,9 +1937,126 @@ const DELIVERY_ROUTE = [
   [12.9835, 77.5510]  // Home Gate
 ];
 
-function initLiveMap() {
+function getOrderRider(orderId) {
+  const riders = [
+    { name: 'Ravi Kumar', phone: '+91 98450 12839', vehicle: 'TVS Jupiter (KA 02 HK 4921)', rating: '4.9 ★ (1.2K+ deliveries)' },
+    { name: 'Mahesh Gowda', phone: '+91 97412 88392', vehicle: 'Honda Activa 6G (KA 04 EL 7819)', rating: '4.8 ★ (980+ deliveries)' },
+    { name: 'Suresh Babu', phone: '+91 99014 62014', vehicle: 'Hero Splendor+ (KA 05 MN 3290)', rating: '4.9 ★ (1.5K+ deliveries)' },
+    { name: 'Pradeep Nayak', phone: '+91 96118 73402', vehicle: 'Bajaj Pulsar 150 (KA 01 TR 6401)', rating: '4.9 ★ (2.1K+ deliveries)' },
+  ];
+  if (!orderId) return riders[0];
+  let sum = 0;
+  for (let i = 0; i < orderId.length; i++) sum += orderId.charCodeAt(i);
+  return riders[Math.abs(sum) % riders.length];
+}
+
+let outgoingRingAudioCtx = null;
+let outgoingRingInterval = null;
+
+function startOutgoingRingSound() {
+  stopOutgoingRingSound();
+  try {
+    outgoingRingAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const playBurst = () => {
+      if (!outgoingRingAudioCtx || outgoingRingAudioCtx.state === 'closed') return;
+      const now = outgoingRingAudioCtx.currentTime;
+      const osc1 = outgoingRingAudioCtx.createOscillator();
+      const osc2 = outgoingRingAudioCtx.createOscillator();
+      const gain = outgoingRingAudioCtx.createGain();
+
+      osc1.frequency.value = 400;
+      osc2.frequency.value = 450;
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.setValueAtTime(0.09, now + 1.2);
+      gain.gain.linearRampToValueAtTime(0.0, now + 1.25);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(outgoingRingAudioCtx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 1.25);
+      osc2.stop(now + 1.25);
+    };
+
+    playBurst();
+    outgoingRingInterval = setInterval(playBurst, 2800);
+  } catch (e) {
+    console.warn('Outgoing sound error:', e);
+  }
+}
+
+function stopOutgoingRingSound() {
+  if (outgoingRingInterval) {
+    clearInterval(outgoingRingInterval);
+    outgoingRingInterval = null;
+  }
+  if (outgoingRingAudioCtx) {
+    try { outgoingRingAudioCtx.close(); } catch (e) {}
+    outgoingRingAudioCtx = null;
+  }
+}
+
+function openCallRiderModal(orderId) {
+  const activeOid = orderId || (state.activeOrder && state.activeOrder.order_id) || 'SWIGGY-ORD-9481';
+  const rider = getOrderRider(activeOid);
+
+  const modal = document.getElementById('call-rider-modal');
+  const nameEl = document.getElementById('call-modal-rider-name');
+  const orderIdEl = document.getElementById('call-modal-order-id');
+  const vehicleEl = document.getElementById('call-modal-vehicle');
+  const phoneEl = document.getElementById('call-modal-phone');
+  const statusMsgEl = document.getElementById('call-modal-status-msg');
+  const dialBtn = document.getElementById('btn-dial-rider-native');
+  const cleanPhone = rider.phone.replace(/[^0-9+]/g, '');
+
+  if (nameEl) nameEl.textContent = rider.name;
+  if (orderIdEl) orderIdEl.textContent = activeOid;
+  if (vehicleEl) vehicleEl.textContent = rider.vehicle;
+  if (phoneEl) phoneEl.textContent = rider.phone;
+  if (dialBtn) dialBtn.href = `tel:${cleanPhone}`;
+  if (statusMsgEl) {
+    statusMsgEl.innerHTML = `Dialing delivery partner <strong>${rider.name}</strong> for active Order <strong>#${activeOid}</strong>.`;
+  }
+
+  if (modal) modal.style.display = 'flex';
+
+  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (isMobile) {
+    setTimeout(() => {
+      window.location.href = `tel:${cleanPhone}`;
+    }, 400);
+  } else {
+    startOutgoingRingSound();
+    setTimeout(() => {
+      if (modal && modal.style.display === 'flex') {
+        stopOutgoingRingSound();
+        if (statusMsgEl) {
+          statusMsgEl.innerHTML = `🟢 <strong>Connected to Partner</strong><br/><span style="color:#10b981;">"${rider.name}: Hello sir! I am carrying your Order #${activeOid}. Reaching your location shortly!"</span>`;
+        }
+      }
+    }, 4000);
+  }
+}
+
+function closeCallRiderModal() {
+  const modal = document.getElementById('call-rider-modal');
+  if (modal) modal.style.display = 'none';
+  stopOutgoingRingSound();
+}
+
+function initLiveMap(orderId = '', rider = null) {
   const mapContainer = document.getElementById('live-map');
   if (!mapContainer || typeof L === 'undefined') return;
+
+  const currentRider = rider || getOrderRider(orderId);
+  const isInstamart = state.activeOrder && (state.activeOrder.is_instamart || (state.activeOrder.restaurant_name || '').toLowerCase().includes('instamart'));
+  const originName = isInstamart ? 'Swiggy Instamart Dark Store' : (state.activeOrder && state.activeOrder.restaurant_name ? state.activeOrder.restaurant_name : 'Meghana Foods');
+  const originEmoji = isInstamart ? '⚡' : '🍛';
 
   if (liveMap) {
     setTimeout(() => liveMap.invalidateSize(), 150);
@@ -1887,13 +2088,13 @@ function initLiveMap() {
 
   // 1. Restaurant Marker
   restaurantMarker = L.marker(RESTAURANT_COORDS, {
-    icon: createEmojiMarker('🍛'),
-  }).addTo(liveMap).bindPopup('<strong>Meghana Foods</strong><br/>Rajajinagar 1st Block, Bengaluru');
+    icon: createEmojiMarker(originEmoji),
+  }).addTo(liveMap).bindPopup(`<strong>${originName}</strong><br/>Order #${orderId || 'Active'}`);
 
   // 2. Home Gate Marker
   homeMarker = L.marker(HOME_COORDS, {
     icon: createEmojiMarker('🏠'),
-  }).addTo(liveMap).bindPopup('<strong>Delivery Location (Gate)</strong><br/>Srinivasa P.G., Rajajinagar');
+  }).addTo(liveMap).bindPopup('<strong>Delivery Location (Gate)</strong><br/>Rajajinagar, Bengaluru');
 
   // 3. Route Polyline
   routePolyline = L.polyline(DELIVERY_ROUTE, {
@@ -1906,7 +2107,7 @@ function initLiveMap() {
   // 4. Rider Marker initially at restaurant
   riderMarker = L.marker(RESTAURANT_COORDS, {
     icon: createEmojiMarker('🛵', 'map-marker-rider'),
-  }).addTo(liveMap).bindPopup('<strong>Rider: Ravi Kumar</strong><br/>TVS Jupiter (KA 02 HK 4921)');
+  }).addTo(liveMap).bindPopup(`<strong>Delivery Partner: ${currentRider.name}</strong><br/>${currentRider.vehicle}<br/>📞 ${currentRider.phone}<br/>Order #${orderId || ''}`);
 
   liveMap.fitBounds(routePolyline.getBounds(), { padding: [40, 40] });
   setTimeout(() => liveMap.invalidateSize(), 300);
@@ -1915,8 +2116,10 @@ function initLiveMap() {
 function moveRiderTo(coords, statusText = '') {
   if (!riderMarker || !liveMap) return;
   riderMarker.setLatLng(coords);
+  const orderId = state.activeOrder ? state.activeOrder.order_id : '';
+  const rider = getOrderRider(orderId);
   if (statusText) {
-    riderMarker.setPopupContent(`<strong>Rider: Ravi Kumar</strong><br/>${statusText}`);
+    riderMarker.setPopupContent(`<strong>${rider.name}</strong> (${rider.vehicle})<br/>📞 ${rider.phone}<br/>${statusText}`);
   }
 }
 
@@ -1977,11 +2180,11 @@ function stopRingtone() {
   }
 }
 
-function showIncomingCallModal(callerName = 'Swiggy Concierge / Rider Ravi', callerNumber = '+91 80 6746 6746 (Rajajinagar Hub)') {
+function showIncomingCallModal(callerName = 'Swiggy Delivery Partner', callerNumber = '+91 80 6746 6746 (Arrival Alert)') {
   const overlay = document.getElementById('phone-call-overlay');
   if (!overlay) return;
 
-  document.getElementById('call-status-label').textContent = 'INCOMING CALL';
+  document.getElementById('call-status-label').textContent = 'GATE ARRIVAL CALL';
   document.getElementById('call-caller-name').textContent = callerName;
   document.getElementById('call-number').textContent = callerNumber;
   document.getElementById('call-incoming-actions').style.display = 'flex';
@@ -2023,7 +2226,7 @@ function setupPhoneCallOverlay() {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const speechMsg = new SpeechSynthesisUtterance(
-          "Hello Sravan! This is your Swiggy delivery partner Ravi Kumar. I have reached the main road and will be at your building gate in Rajajinagar in 2 minutes. Please come downstairs to collect your hot Meghana Foods order."
+          "Hello! This is your Swiggy delivery partner. I have reached the main gate in Rajajinagar and will be at your door in 2 minutes. Please collect your order."
         );
         speechMsg.rate = 1.0;
         speechMsg.pitch = 1.0;
@@ -2053,7 +2256,43 @@ function setupPhoneCallOverlay() {
   const callRiderBtn = document.getElementById('btn-call-rider');
   if (callRiderBtn) {
     callRiderBtn.addEventListener('click', () => {
-      showIncomingCallModal('Ravi Kumar (Delivery Partner)', '+91 98450 12839 (KA 02 HK 4921)');
+      const orderId = state.activeOrder ? state.activeOrder.order_id : '';
+      openCallRiderModal(orderId);
+    });
+  }
+
+  // Outgoing call modal buttons
+  const closeCallBtn = document.getElementById('btn-close-call-modal');
+  if (closeCallBtn) closeCallBtn.addEventListener('click', closeCallRiderModal);
+
+  const dismissCallBtn = document.getElementById('btn-dismiss-call-modal');
+  if (dismissCallBtn) dismissCallBtn.addEventListener('click', closeCallRiderModal);
+
+  const copyRiderPhoneBtn = document.getElementById('btn-copy-rider-phone');
+  if (copyRiderPhoneBtn) {
+    copyRiderPhoneBtn.addEventListener('click', () => {
+      const orderId = state.activeOrder ? state.activeOrder.order_id : '';
+      const rider = getOrderRider(orderId);
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(rider.phone).then(() => {
+          showToast(`📋 Copied rider phone (${rider.phone}) to clipboard!`);
+        }).catch(() => {
+          showToast(`📞 Rider Phone: ${rider.phone}`);
+        });
+      } else {
+        showToast(`📞 Rider Phone: ${rider.phone}`);
+      }
+    });
+  }
+
+  // Dismiss tracking button
+  const dismissTrackingBtn = document.getElementById('btn-dismiss-tracking');
+  if (dismissTrackingBtn) {
+    dismissTrackingBtn.addEventListener('click', () => {
+      state.activeOrder = null;
+      localStorage.removeItem('smartflow_active_order');
+      syncTrackingTabState();
+      showToast('🛵 Live tracking closed. Ready for next order.');
     });
   }
 }
@@ -2074,7 +2313,6 @@ function startLiveTrackingDemo() {
     is_active: true,
     is_demo: true,
   };
-  persistActiveOrder();
   syncTrackingTabState();
   showToast('🛵 Live GPS Delivery Tracking demonstration started!');
 }
@@ -2088,9 +2326,9 @@ async function syncTrackingTabState() {
   let isOrderActive = false;
 
   // Check state.activeOrder
-  if (state.activeOrder && state.activeOrder.order_id) {
+  if (state.activeOrder && state.activeOrder.order_id && state.activeOrder.is_active) {
     const st = (state.activeOrder.order_status || state.activeOrder.status || '').toLowerCase();
-    if (state.activeOrder.is_demo || state.activeOrder.is_active || ['placed', 'confirmed', 'preparing', 'in_transit', 'out_for_delivery', 'picked_up', 'on the way'].includes(st)) {
+    if (!['delivered', 'cancelled', 'completed'].includes(st)) {
       isOrderActive = true;
     }
   }
@@ -2101,7 +2339,7 @@ async function syncTrackingTabState() {
       const ordersRes = await api.getOrders(15);
       if (ordersRes.success && ordersRes.data && ordersRes.data.orders) {
         const activeOrder = ordersRes.data.orders.find((o) =>
-          o.is_active || ['placed', 'confirmed', 'preparing', 'in_transit', 'out_for_delivery', 'picked_up', 'on the way'].includes((o.order_status || '').toLowerCase())
+          o.is_active && ['placed', 'confirmed', 'preparing', 'in_transit', 'out_for_delivery', 'picked_up', 'on the way'].includes((o.order_status || '').toLowerCase())
         );
         if (activeOrder) {
           state.activeOrder = {
@@ -2120,7 +2358,7 @@ async function syncTrackingTabState() {
     }
   }
 
-  // If no active in-transit order, show clean "No Active Order" banner
+  // If no active in-transit order, strictly hide tracking and do not render route/map
   if (!isOrderActive) {
     if (noOrderBox) noOrderBox.style.display = 'block';
     if (activeSection) activeSection.style.display = 'none';
@@ -2128,20 +2366,44 @@ async function syncTrackingTabState() {
       clearInterval(trackingPollInterval);
       trackingPollInterval = null;
     }
+    if (liveMap) {
+      try {
+        liveMap.remove();
+        liveMap = null;
+        riderMarker = null;
+        restaurantMarker = null;
+        homeMarker = null;
+        routePolyline = null;
+      } catch (e) {}
+    }
     return;
   }
 
-  // Active or Demo Order is present
+  // Active Order is present! Show active section and hide empty box
   if (noOrderBox) noOrderBox.style.display = 'none';
   if (activeSection) activeSection.style.display = 'block';
 
-  // Initialize Map
-  initLiveMap();
+  const orderId = state.activeOrder.order_id;
+  const rider = getOrderRider(orderId);
+
+  // Update Rider Card with order-specific info
+  const rName = document.getElementById('rider-name-val');
+  const rRating = document.getElementById('rider-rating-val');
+  const rVehicle = document.getElementById('rider-vehicle-val');
+  const rOrder = document.getElementById('rider-assigned-order-id');
+  const rPhone = document.getElementById('rider-direct-phone-val');
+  if (rName) rName.textContent = rider.name;
+  if (rRating) rRating.textContent = rider.rating;
+  if (rVehicle) rVehicle.textContent = rider.vehicle;
+  if (rOrder) rOrder.textContent = orderId;
+  if (rPhone) rPhone.textContent = rider.phone;
+
+  // Initialize Map for this specific order
+  initLiveMap(orderId, rider);
   setTimeout(() => {
     if (liveMap) liveMap.invalidateSize();
   }, 200);
 
-  const orderId = state.activeOrder.order_id;
   const itemsText = state.activeOrder.ordered_items || state.activeOrder.items_summary || 'Food order';
   const itemsSummaryEl = document.getElementById('tracking-items-summary');
   if (itemsSummaryEl) itemsSummaryEl.textContent = `${state.activeOrder.restaurant_name || 'Meghana Foods'} • ${itemsText}`;
@@ -2257,6 +2519,16 @@ async function pollLiveTracking(orderId) {
       });
       if (progressBar) progressBar.style.width = '100%';
       moveRiderTo(HOME_COORDS, 'Delivered at Gate');
+      if (badgeEl) badgeEl.textContent = 'Swiggy: Delivered ✓';
+      if (state.activeOrder) {
+        state.activeOrder.order_status = 'Delivered';
+        state.activeOrder.is_active = false;
+        persistActiveOrder();
+      }
+      if (trackingPollInterval) {
+        clearInterval(trackingPollInterval);
+        trackingPollInterval = null;
+      }
     } else if (progressPct >= 85 || (etaText && etaText.includes('2 min')) || status === 'arriving') {
       if (steps[0]) steps[0].className = 'step done';
       if (steps[1]) steps[1].className = 'step done';
@@ -2287,7 +2559,7 @@ async function pollLiveTracking(orderId) {
       if (steps[0]) steps[0].className = 'step done';
       if (steps[1]) steps[1].className = 'step active';
       if (progressBar) progressBar.style.width = '25%';
-      moveRiderTo(RESTAURANT_COORDS, 'At Meghana Foods • Kitchen preparing food');
+      moveRiderTo(RESTAURANT_COORDS, 'Kitchen preparing food');
     }
   } catch (e) {
     console.warn('Live tracking poll error:', e);
@@ -2295,12 +2567,13 @@ async function pollLiveTracking(orderId) {
 }
 
 function triggerGateArrivalAlert(orderId, etaText) {
+  const rider = getOrderRider(orderId);
   const alertBox = document.getElementById('gate-arrival-alert');
   if (alertBox) {
     alertBox.style.display = 'flex';
     const alertMsg = document.getElementById('gate-arrival-alert-msg');
     if (alertMsg) {
-      alertMsg.innerHTML = `Rider <strong>Ravi Kumar</strong> is ${etaText || '2 minutes'} from your building gate in Rajajinagar. Incoming call triggered!`;
+      alertMsg.innerHTML = `Rider <strong>${rider.name}</strong> (${rider.vehicle}) is ${etaText || '2 minutes'} from your building gate in Rajajinagar for Order <strong>#${orderId}</strong>.`;
     }
   }
 
@@ -2308,21 +2581,21 @@ function triggerGateArrivalAlert(orderId, etaText) {
   playArrivalChime();
 
   // Toast
-  showToast('🚨 PROACTIVE ALERT: Rider is 2 minutes from your gate in Rajajinagar!');
+  showToast(`🚨 PROACTIVE ALERT: Rider ${rider.name} is 2 minutes from your gate!`);
 
   // Desktop notification
   if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('SmartFlow: Rider Arriving in 2 Mins!', {
-      body: 'Your Meghana Foods food order is arriving at the building gate. Please be ready!',
+    new Notification(`SmartFlow: Rider ${rider.name} Arriving in 2 Mins!`, {
+      body: `Your order #${orderId} is arriving at the building gate. Please be ready!`,
       icon: 'https://media-assets.swiggy.com/swiggy/image/upload/FOOD_CATALOG/IMAGES/CMS/2025/12/29/57bebf52-5a58-42e0-af9d-3d872d52de83_2d89d14b-3568-4be1-946d-1d7b0539edae.jpg',
     });
   }
 
   // Trigger Incoming Call Screen with ringtone & speech
-  showIncomingCallModal('Ravi Kumar (Swiggy Delivery)', '+91 80 6746 6746 (Arrival Alert)');
+  showIncomingCallModal(`${rider.name} (Swiggy Delivery Partner)`, `${rider.phone} • Order #${orderId}`);
 
   // Dispatch backend automated cellular call
-  api.triggerAutomatedCall(null, 'Hello Sravan! Your Swiggy delivery rider Ravi is 2 minutes from your gate in Rajajinagar. Please collect your food.').catch((e) => console.warn('Twilio call notice:', e));
+  api.triggerAutomatedCall(null, `Hello! Your Swiggy delivery rider ${rider.name} is 2 minutes from your gate in Rajajinagar for Order ${orderId}. Please collect your order.`).catch((e) => console.warn('Twilio call notice:', e));
 }
 
 

@@ -7,6 +7,8 @@ from app.schemas.common import APIResponse
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
 
+from app.core.dependencies import get_current_user_id
+
 @router.get("/options", response_model=APIResponse)
 async def get_payment_options(
     request: Request,
@@ -16,8 +18,9 @@ async def get_payment_options(
     Phase 10: Fetch live available payment options for the active cart (Mobile UPI apps, Scan QR, COD).
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        data = await payment_service.get_payment_options(address_id=address_id)
+        data = await payment_service.get_payment_options(address_id=address_id, user_id=user_id)
         return APIResponse(
             success=True,
             data=data.model_dump(),

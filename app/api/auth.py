@@ -13,6 +13,8 @@ from app.schemas.common import APIResponse
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+from app.core.dependencies import get_current_user_id
+
 @router.get("/login", response_model=APIResponse)
 async def login(request: Request):
     """
@@ -20,7 +22,8 @@ async def login(request: Request):
     Returns the Swiggy authorization URL to open in browser.
     """
     request_id = getattr(request.state, "request_id", None)
-    res = await auth_service.initiate_login()
+    user_id = get_current_user_id(request)
+    res = await auth_service.initiate_login(user_id=user_id)
     return APIResponse(
         success=True,
         data=res.model_dump(),
@@ -53,8 +56,9 @@ async def verify_otp(request: Request, body: VerifyOtpRequest):
     Verifies OTP and completes Swiggy OAuth token exchange directly in-app.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        res = await auth_service.verify_otp(body.phone, body.otp)
+        res = await auth_service.verify_otp(body.phone, body.otp, user_id=user_id)
         return APIResponse(
             success=True,
             data=res,
@@ -140,7 +144,8 @@ async def status(request: Request):
     Checks if active, unexpired Swiggy OAuth session exists.
     """
     request_id = getattr(request.state, "request_id", None)
-    res = await auth_service.get_status()
+    user_id = get_current_user_id(request)
+    res = await auth_service.get_status(user_id=user_id)
     return APIResponse(
         success=True,
         data=res.model_dump(),
@@ -156,7 +161,8 @@ async def direct_connect(request: Request):
     Establishes active authenticated session and updates state.
     """
     request_id = getattr(request.state, "request_id", None)
-    res = await auth_service.connect_direct()
+    user_id = get_current_user_id(request)
+    res = await auth_service.connect_direct(user_id=user_id)
     return APIResponse(
         success=True,
         data=res,
@@ -171,7 +177,8 @@ async def logout(request: Request):
     Logs out and deletes active Swiggy session from MongoDB.
     """
     request_id = getattr(request.state, "request_id", None)
-    await auth_service.logout()
+    user_id = get_current_user_id(request)
+    await auth_service.logout(user_id=user_id)
     return APIResponse(
         success=True,
         data={"authenticated": False},

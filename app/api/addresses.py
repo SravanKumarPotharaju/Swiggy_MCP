@@ -7,6 +7,8 @@ from app.schemas.common import APIResponse
 router = APIRouter(prefix="/addresses", tags=["Addresses"])
 
 
+from app.core.dependencies import get_current_user_id
+
 @router.get("", response_model=APIResponse)
 async def get_addresses(request: Request):
     """
@@ -14,11 +16,12 @@ async def get_addresses(request: Request):
     Calls `get_addresses` on https://mcp.swiggy.com/food.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        result = await mcp_client.call_tool("get_addresses", arguments={})
+        result = await mcp_client.call_tool("get_addresses", arguments={}, user_id=user_id)
     except (MCPAuthenticationError, MCPConnectionError, Exception):
         from app.db.repositories import AddressRepository
-        saved = await AddressRepository.get_active_address("user_default")
+        saved = await AddressRepository.get_active_address(user_id)
         addr_id = saved.get("id", "addr_home_1") if saved else "addr_home_1"
         addr_line = saved.get("addressLine", "mewt, 4th main road, Rajajinagar, Bengaluru") if saved else "mewt, 4th main road, Rajajinagar, Bengaluru"
         fallback_list = [

@@ -62,12 +62,12 @@ class AuthService:
 
         return "smartflow-client"
 
-    async def initiate_login(self) -> LoginInitiateResponse:
+    async def initiate_login(self, user_id: str = DEFAULT_USER_ID) -> LoginInitiateResponse:
         """Initiates OAuth 2.1 + PKCE flow."""
         state = secrets.token_urlsafe(24)
         code_verifier, code_challenge = generate_pkce()
 
-        await AuthRepository.save_pkce_state(state, code_verifier, ttl_seconds=180)
+        await AuthRepository.save_pkce_state(state, code_verifier, ttl_seconds=180, user_id=user_id)
         client_id = await self.get_or_register_client_id()
 
         params = {
@@ -84,7 +84,12 @@ class AuthService:
 
     async def handle_callback(self, code: str, state: str) -> dict:
         """Validates state, exchanges code for access_token, and saves encrypted session."""
-        code_verifier = await AuthRepository.get_and_delete_pkce_state(state)
+        pkce_info = await AuthRepository.get_and_delete_pkce_state(state)
+        if not pkce_info:
+            raise ValueError("Invalid or expired OAuth state.")
+
+        code_verifier = pkce_info.get("code_verifier")
+        user_id = pkce_info.get("user_id") or DEFAULT_USER_ID
         if not code_verifier:
             raise ValueError("Invalid or expired OAuth state.")
 
@@ -117,12 +122,12 @@ class AuthService:
         scope = data.get("scope", "mcp:tools")
 
         encrypted_token = encrypt_token(access_token)
-        await AuthRepository.save_oauth_session(DEFAULT_USER_ID, encrypted_token, expires_at, scope)
-        logger.info(f"Successfully authenticated session for {DEFAULT_USER_ID}. Expires in {expires_in}s.")
+        await AuthRepository.save_oauth_session(user_id, encrypted_token, expires_at, scope)
+        logger.info(f"Successfully authenticated session for {user_id}. Expires in {expires_in}s.")
 
         return {
             "authenticated": True,
-            "user_id": DEFAULT_USER_ID,
+            "user_id": user_id,
             "message": "Swiggy authentication successful.",
         }
 

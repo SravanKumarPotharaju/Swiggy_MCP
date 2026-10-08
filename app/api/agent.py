@@ -26,6 +26,8 @@ class SetAddressRequest(BaseModel):
     address: Dict[str, Any] = Field(default_factory=dict, description="Address object to set as active")
 
 
+from app.core.dependencies import get_current_user_id
+
 @router.post("/chat", response_model=APIResponse)
 async def chat_with_agent(
     request: Request,
@@ -36,9 +38,11 @@ async def chat_with_agent(
     executes Swiggy MCP tools, and returns the AI's response.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
+    caller_phone = body.user_phone or user_id
     try:
         res = await llm_agent.process_user_message(
-            user_phone=body.user_phone,
+            user_phone=caller_phone,
             text_message=body.message,
         )
         if isinstance(res, dict):
@@ -74,12 +78,13 @@ async def chat_with_agent(
 @router.post("/address", response_model=APIResponse)
 async def set_active_address(request: Request, body: SetAddressRequest):
     """
-    Sets the active delivery address from the UI selector.
+    Sets the active delivery address from the UI selector for the caller's account.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     from app.db.repositories import AddressRepository
     address_data = body.address
-    await AddressRepository.set_active_address("user_default", address_data)
+    await AddressRepository.set_active_address(user_id, address_data)
     return APIResponse(
         success=True,
         data=address_data,
@@ -131,17 +136,19 @@ async def get_initial_state(request: Request):
     - Meghana Foods menu
     """
     request_id = getattr(request.state, "request_id", None)
+    from app.core.dependencies import get_current_user_id
+    user_id = get_current_user_id(request)
     try:
         # 1. Address
         addresses = []
         try:
-            addr_res = await mcp_client.call_tool("get_addresses", {})
+            addr_res = await mcp_client.call_tool("get_addresses", {}, user_id=user_id)
             addresses = addr_res.get("structuredContent", {}).get("addresses", [])
         except Exception:
             pass
 
         from app.db.repositories import AddressRepository
-        saved_active = await AddressRepository.get_active_address("user_default")
+        saved_active = await AddressRepository.get_active_address(user_id)
         default_addr = saved_active if saved_active else (addresses[0] if addresses else {
             "id": "addr_home_1",
             "addressTag": "Home",
@@ -153,14 +160,14 @@ async def get_initial_state(request: Request):
         if not addresses:
             addresses = [default_addr]
 
-        # 2. Cart (Swiggy Food)
-        cart = await cart_service.get_cart()
+        # 2. Cart (Swiggy Food) - isolated to this user session
+        cart = await cart_service.get_cart(user_id=user_id)
 
-        # 3. Cart (Swiggy Instamart)
+        # 3. Cart (Swiggy Instamart) - isolated to this user session
         instamart_cart = None
         try:
             from app.services.instamart_service import instamart_service
-            im_res = await instamart_service.get_cart(user_id="user_default")
+            im_res = await instamart_service.get_cart(user_id=user_id)
             instamart_cart = im_res.model_dump()
         except Exception as im_err:
             logger.warning(f"Failed to fetch initial Instamart cart: {im_err}")

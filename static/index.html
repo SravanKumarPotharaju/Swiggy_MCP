@@ -40,11 +40,6 @@
         <span id="swiggy-auth-label">Connect Swiggy</span>
       </button>
 
-      <button class="btn-call" id="btn-call-phone" title="Trigger Automated Call to your phone">
-        <span>📞</span>
-        <span>Call My Phone</span>
-      </button>
-
       <button class="cart-btn" id="btn-open-cart" title="View Cart">
         <span>🛒</span>
         <span>Cart</span>
@@ -254,14 +249,22 @@
           </div>
 
           <!-- Tracking Status Header -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.8rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); padding: 1rem 1.2rem; border-radius: var(--radius-md);">
             <div>
-              <h3 id="tracking-order-id" style="font-size: 1.25rem; font-weight: 800; color: white;">Order Tracking</h3>
-              <div id="tracking-items-summary" style="font-size: 0.85rem; color: #94a3b8; margin-top: 2px;"></div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 id="tracking-order-id" style="font-size: 1.25rem; font-weight: 800; color: white; margin: 0;">Order Tracking</h3>
+                <span id="tracking-order-type-badge" style="font-size: 0.75rem; background: rgba(255,82,0,0.15); color: #ff5200; padding: 2px 8px; border-radius: 999px; font-weight: 700;">ACTIVE ORDER</span>
+              </div>
+              <div id="tracking-items-summary" style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;"></div>
             </div>
-            <div style="text-align: right;">
-              <span id="tracking-eta" style="color: #10b981; font-weight: 700; font-size: 1.1rem; display: block;">Live ETA</span>
-              <span id="tracking-status-badge" style="font-size: 0.78rem; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 999px;">Connecting to Swiggy...</span>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <div style="text-align: right;">
+                <span id="tracking-eta" style="color: #10b981; font-weight: 700; font-size: 1.1rem; display: block;">Live ETA</span>
+                <span id="tracking-status-badge" style="font-size: 0.78rem; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 999px;">Connecting to Swiggy...</span>
+              </div>
+              <button class="chip" id="btn-dismiss-tracking" style="padding: 0.45rem 0.9rem; font-size: 0.8rem; background: rgba(255,255,255,0.06); color: #cbd5e1; border: 1px solid var(--border-color); cursor: pointer;" title="Close live tracking view and return to overview">
+                Dismiss Tracking ✕
+              </button>
             </div>
           </div>
 
@@ -293,23 +296,41 @@
                 <span>🗺️ Live Delivery Partner GPS Tracking</span>
                 <span style="font-size: 0.75rem; background: rgba(16,185,129,0.2); color: #10b981; padding: 2px 8px; border-radius: 999px;">LIVE GPS</span>
               </div>
-              <div style="font-size: 0.85rem; color: #94a3b8;">Rajajinagar Delivery Zone</div>
+              <div style="font-size: 0.85rem; color: #94a3b8;" id="tracking-dest-label">Rajajinagar Delivery Zone</div>
             </div>
             <div id="live-map"></div>
           </div>
 
-          <!-- Rider Profile Card -->
+          <!-- Rider Profile Card (Transparent Rider & Order Calling Information) -->
           <div class="rider-card" id="rider-card">
             <div class="rider-info">
-              <div class="rider-avatar">🛵</div>
+              <div class="rider-avatar" style="position: relative;">
+                <span>🛵</span>
+                <span class="rider-live-dot" title="Delivery Partner is active on route"></span>
+              </div>
               <div>
-                <div class="rider-name" id="rider-card-name">Ravi Kumar <span style="color: #f59e0b; font-size: 0.85rem;">★ 4.9 (1.2K+ deliveries)</span></div>
-                <div class="rider-sub" id="rider-card-sub">TVS Jupiter • KA 02 HK 4921 • Verified Swiggy Fleet</div>
+                <div class="rider-name" id="rider-card-name">
+                  <span id="rider-name-val">Ravi Kumar</span>
+                  <span id="rider-rating-val" style="color: #f59e0b; font-size: 0.85rem; font-weight: 600;">★ 4.9 (1.2K+ deliveries)</span>
+                </div>
+                <div class="rider-sub" id="rider-card-sub">
+                  <span id="rider-vehicle-val">TVS Jupiter • KA 02 HK 4921</span> • Verified Swiggy Fleet
+                </div>
+                <div class="rider-details-tags" style="display: flex; align-items: center; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
+                  <span style="font-size: 0.76rem; background: rgba(255, 82, 0, 0.15); color: #ff5200; padding: 2px 8px; border-radius: 6px; font-weight: 700;">
+                    Assigned to Order #<span id="rider-assigned-order-id">ORD-9481</span>
+                  </span>
+                  <span style="font-size: 0.76rem; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 6px; font-weight: 600;">
+                    📞 Direct Line: <span id="rider-direct-phone-val">+91 98450 12839</span>
+                  </span>
+                </div>
               </div>
             </div>
-            <button class="btn-call" id="btn-call-rider" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">
-              <span>📞</span> <span>Call Rider</span>
-            </button>
+            <div class="rider-actions" style="display: flex; gap: 8px; align-items: center;">
+              <button class="btn-call" id="btn-call-rider" title="Call assigned delivery partner for this order">
+                <span>📞</span> <span>Call Rider</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -455,34 +476,60 @@
         </span>
       </div>
 
-      <!-- QR Code & One-Click App Pay Section -->
+      <!-- Direct Mobile UPI Apps & Gateway Section -->
       <div id="qr-section">
-        <!-- Direct UPI Apps Buttons -->
-        <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 0.4rem;">Tap to open UPI app directly:</div>
-        <div class="upi-apps-grid">
-          <button class="upi-pill-btn" id="btn-pay-gpay">🔵 Google Pay</button>
-          <button class="upi-pill-btn" id="btn-pay-phonepe">🟣 PhonePe</button>
-          <button class="upi-pill-btn" id="btn-pay-paytm">🔷 Paytm</button>
-          <button class="upi-pill-btn" id="btn-pay-cred">⚪ CRED</button>
+        <div style="font-size: 0.86rem; color: #cbd5e1; font-weight: 600; margin-bottom: 0.6rem; text-align: center;">
+          📱 Tap your UPI App to Pay Directly:
         </div>
 
-        <div class="qr-box">
-          <img id="swiggy-qr-img" class="qr-img" src="" alt="Swiggy UPI QR Code" />
+        <!-- 1-Click Direct Apps Grid -->
+        <div class="upi-apps-grid" id="upi-apps-grid">
+          <button class="upi-pill-btn upi-phonepe" id="btn-pay-phonepe" title="Pay with PhonePe">
+            <span class="upi-icon">🟣</span>
+            <span class="upi-name">PhonePe</span>
+          </button>
+          <button class="upi-pill-btn upi-gpay" id="btn-pay-gpay" title="Pay with Google Pay">
+            <span class="upi-icon">🔵</span>
+            <span class="upi-name">Google Pay</span>
+          </button>
+          <button class="upi-pill-btn upi-paytm" id="btn-pay-paytm" title="Pay with Paytm">
+            <span class="upi-icon">🔷</span>
+            <span class="upi-name">Paytm</span>
+          </button>
+          <button class="upi-pill-btn upi-cred" id="btn-pay-cred" title="Pay with CRED">
+            <span class="upi-icon">⚪</span>
+            <span class="upi-name">CRED UPI</span>
+          </button>
         </div>
 
-        <!-- Copy UPI Row -->
-        <div class="copy-row">
-          <span style="color: #cbd5e1; font-family: monospace;" id="upi-vpa-text">swiggyupi@axb</span>
-          <button class="copy-btn" id="btn-copy-upi">Copy UPI ID</button>
-        </div>
+        <!-- Universal 1-Click Intent Button for Mobile -->
+        <button class="btn-universal-upi" id="btn-pay-universal">
+          <span>⚡</span> <span>Pay via Any Installed UPI App</span> <span>↗</span>
+        </button>
 
-        <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.4rem;">
-          Scan with any UPI app on your phone, or tap an app above to pay.
-        </p>
+        <!-- Desktop QR Code / Second Device Scan Accordion -->
+        <div class="qr-accordion-box" id="qr-accordion-box">
+          <div class="qr-accordion-header" id="btn-toggle-qr" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.8rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid var(--border-color); margin-top: 0.75rem;">
+            <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 600;">📷 Or Scan UPI QR Code (Desktop / 2nd Device)</span>
+            <span id="qr-toggle-arrow" style="font-size: 0.75rem; color: #ff5200; transition: transform 0.2s;">▼</span>
+          </div>
+
+          <div id="qr-content-body" style="display: block; margin-top: 0.5rem;">
+            <div class="qr-box">
+              <img id="swiggy-qr-img" class="qr-img" src="" alt="Swiggy UPI QR Code" />
+            </div>
+
+            <!-- Copy UPI Row -->
+            <div class="copy-row">
+              <span style="color: #cbd5e1; font-family: monospace; font-size: 0.85rem;" id="upi-vpa-text">9390787901@upi</span>
+              <button class="copy-btn" id="btn-copy-upi">Copy UPI ID</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <button class="btn-approve-order" id="btn-final-pay" style="margin-top: 1rem;">
-        I Have Paid • Track Order 🛵
+        I Have Paid • Track Live Order 🛵
       </button>
     </div>
   </div>
@@ -605,13 +652,72 @@
     </div>
   </div>
 
+  <!-- OUTGOING CALL TO RIDER MODAL (Clear functionality showing who is being called and for which order) -->
+  <div class="call-rider-overlay" id="call-rider-modal" style="display: none;">
+    <div class="call-rider-card">
+      <div class="call-rider-header">
+        <span class="call-type-pill">📞 OUTGOING CALL TO RIDER</span>
+        <button class="call-modal-close" id="btn-close-call-modal" aria-label="Close modal">&times;</button>
+      </div>
+
+      <div class="call-rider-profile-box">
+        <div class="call-rider-avatar-pulse">
+          <span style="font-size: 2.2rem;">🛵</span>
+        </div>
+        <h3 id="call-modal-rider-name" style="font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0.6rem 0 0 0;">Ravi Kumar</h3>
+        <p id="call-modal-rider-title" style="font-size: 0.85rem; color: #10b981; font-weight: 600; margin: 3px 0 0 0;">
+          Assigned Swiggy Delivery Partner • On Duty
+        </p>
+        <div style="margin-top: 8px;">
+          <span style="display: inline-block; background: rgba(255, 82, 0, 0.15); color: #ff5200; border: 1px solid rgba(255, 82, 0, 0.3); font-size: 0.8rem; padding: 3px 12px; border-radius: 999px; font-weight: 700;">
+            Calling for Order #<span id="call-modal-order-id">ORD-9481</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="call-rider-meta-details">
+        <div class="call-meta-item">
+          <span class="call-meta-label">Vehicle:</span>
+          <span class="call-meta-val" id="call-modal-vehicle">TVS Jupiter (KA 02 HK 4921)</span>
+        </div>
+        <div class="call-meta-item">
+          <span class="call-meta-label">Rider Direct Line:</span>
+          <span class="call-meta-val" id="call-modal-phone" style="color: #10b981; font-weight: 700; font-size: 1rem;">+91 98450 12839</span>
+        </div>
+        <div class="call-meta-item">
+          <span class="call-meta-label">Relay Mode:</span>
+          <span class="call-meta-val" style="color: #94a3b8;">Swiggy Secure Direct Bridge</span>
+        </div>
+      </div>
+
+      <div class="call-modal-status-text" id="call-modal-status-msg">
+        Ready to connect with your assigned delivery partner for this active order.
+      </div>
+
+      <div class="call-modal-actions-row">
+        <a id="btn-dial-rider-native" href="tel:+919845012839" class="btn-call-action-dial" title="Dial directly using phone app">
+          <span>📞</span> <span>Dial Now</span>
+        </a>
+        <button id="btn-copy-rider-phone" class="btn-call-action-copy" title="Copy rider phone number to clipboard">
+          <span>📋</span> <span>Copy Phone #</span>
+        </button>
+      </div>
+
+      <div style="margin-top: 1rem; text-align: center;">
+        <button id="btn-dismiss-call-modal" class="btn-call-action-cancel">
+          Done / Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- JavaScript Modules -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/js/api.js?v=12"></script>
-  <script src="/static/js/voice.js?v=12"></script>
-  <script src="/static/js/app.js?v=12"></script>
+  <script src="/static/js/api.js?v=13"></script>
+  <script src="/static/js/voice.js?v=13"></script>
+  <script src="/static/js/app.js?v=13"></script>
 </body>
 </html>
