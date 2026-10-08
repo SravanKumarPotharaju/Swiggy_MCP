@@ -160,9 +160,10 @@ function resetSheetDrag(sheet) {
 }
 
 function openSheet(layer, opener = document.activeElement) {
-  if (!layer) return;
+  // Already open (for example switching cart tabs): keep focus and the original opener
+  if (!layer || layer.classList.contains('is-open')) return;
   const sheet = layer.querySelector('.r-sheet');
-  if (!layer.classList.contains('is-open')) sheetOpeners.set(layer, opener);
+  sheetOpeners.set(layer, opener);
   if (sheet) resetSheetDrag(sheet);
   layer.classList.add('is-open');
   layer.setAttribute('aria-hidden', 'false');
@@ -1518,7 +1519,6 @@ async function addInstamartCartItem(spinId, delta, itemName = 'Item') {
 
 // --- CART DRAWER CONTROLLER ---
 function setupCartDrawer() {
-  const overlay = document.getElementById('cart-drawer-overlay');
   const openBtn = document.getElementById('btn-open-cart');
   const closeBtn = document.getElementById('btn-close-cart');
   const approveBtn = document.getElementById('btn-approve-order');
@@ -1530,13 +1530,7 @@ function setupCartDrawer() {
     openCartDrawerWithType(state.activeCartType || 'food');
   });
 
-  closeBtn.addEventListener('click', () => {
-    closeCartDrawer();
-  });
-
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeCartDrawer();
-  });
+  closeBtn.addEventListener('click', closeCartDrawer);
 
   approveBtn.addEventListener('click', () => {
     closeCartDrawer();
@@ -1554,23 +1548,27 @@ function setupCartDrawer() {
   }
 
   if (clearActiveBtn) {
-    clearActiveBtn.addEventListener('click', async () => {
-      if (state.activeCartType === 'instamart') {
-        showToast('Clearing Instamart cart...');
-        await api.clearInstamartCart();
-        state.instamartCart = { items: [], total_items: 0, total_amount: '₹0', bill_breakdown: null };
-        persistCarts();
-        await refreshInstamartCart();
-        showToast('⚡ Instamart cart cleared');
-      } else {
-        showToast('Clearing Food cart...');
-        await api.clearCart();
-        state.cart = { items: [], pricing: null, item_count: 0 };
-        persistCarts();
-        await refreshCart();
-        showToast('🍛 Food cart cleared');
+    clearActiveBtn.addEventListener('click', () => withBusy(clearActiveBtn, async () => {
+      const isInstamart = state.activeCartType === 'instamart';
+      showToast(isInstamart ? 'Clearing Instamart cart...' : 'Clearing food cart...');
+      try {
+        if (isInstamart) {
+          await api.clearInstamartCart();
+          state.instamartCart = { items: [], total_items: 0, total_amount: '₹0', bill_breakdown: null };
+          persistCarts();
+          await refreshInstamartCart();
+        } else {
+          await api.clearCart();
+          state.cart = { items: [], pricing: null, item_count: 0 };
+          persistCarts();
+          await refreshCart();
+        }
+        showToast(isInstamart ? 'Instamart cart cleared' : 'Food cart cleared');
+      } catch (err) {
+        console.error('Error clearing cart:', err);
+        showToast('Could not clear the cart.', { error: true });
       }
-    });
+    }));
   }
 }
 
@@ -1578,8 +1576,14 @@ function updateCartBadge() {
   const badge = document.getElementById('cart-badge');
   const foodCount = state.cart ? (state.cart.item_count || (state.cart.items || []).length) : 0;
   const imCount = state.instamartCart ? (state.instamartCart.total_items || (state.instamartCart.items || []).length) : 0;
+  const total = foodCount + imCount;
 
-  if (badge) badge.textContent = foodCount + imCount;
+  if (badge) {
+    badge.textContent = total;
+    badge.hidden = total === 0;
+  }
+  const openBtn = document.getElementById('btn-open-cart');
+  if (openBtn) openBtn.setAttribute('aria-label', total > 0 ? `Open cart, ${total} items` : 'Open cart');
   const foodPill = document.getElementById('cart-food-count');
   if (foodPill) foodPill.textContent = foodCount;
   const imPill = document.getElementById('cart-im-count');
@@ -1619,194 +1623,178 @@ async function refreshInstamartCart() {
   }
 }
 
-function renderCartDrawerItems() {
-  const container = document.getElementById('cart-items-list');
+// One bill line (.r-bill__row); the optional id keeps the legacy value-element ids.
+function billRowHtml(label, value, { id = '', free = false, total = false } = {}) {
+  return `
+    <div class="r-bill__row${total ? ' r-bill__row--total' : ''}">
+      <span class="r-bill__label">${escapeHtml(label)}</span>
+      <span class="r-bill__value${free ? ' r-bill__value--free' : ''}"${id ? ` id="${id}"` : ''}>${escapeHtml(value)}</span>
+    </div>
+  `;
+}
+
+// One cart line (.r-row): name and detail, then quantity stepper and line amount.
+function cartRowEl({ name, sub, qty, amount, dataAttrs }, onDec, onInc) {
+  const el = document.createElement('div');
+  el.className = 'r-row';
+  el.innerHTML = `
+    <div class="r-row__main">
+      <p class="r-row__title">${escapeHtml(name)}</p>
+      ${sub ? `<p class="r-row__sub">${escapeHtml(sub)}</p>` : ''}
+    </div>
+    <div class="r-row__trail">
+      ${stepperHtml(qty, name, dataAttrs)}
+      ${amount ? `<span class="r-row__amount">${escapeHtml(amount)}</span>` : ''}
+    </div>
+  `;
+  el.querySelector('[data-action="dec"]').addEventListener('click', onDec);
+  el.querySelector('[data-action="inc"]').addEventListener('click', onInc);
+  return el;
+}
+
+// Bill card, footer and approve button. The CTA amount stays empty when the backend sent no total.
+function setCartCheckout(visible, { billHtml = '', amountText = '' } = {}) {
   const billBox = document.getElementById('cart-bill-breakdown');
-  const approveBtn = document.getElementById('btn-approve-order');
   const footerEl = document.getElementById('cart-drawer-footer');
+  const approveBtn = document.getElementById('btn-approve-order');
+  if (billBox) {
+    billBox.innerHTML = billHtml;
+    billBox.style.display = visible && billHtml ? '' : 'none';
+  }
+  if (footerEl) footerEl.style.display = visible ? '' : 'none';
+  if (approveBtn) approveBtn.disabled = !visible;
+  setButtonAmount(approveBtn, amountText);
+}
+
+function renderCartEmpty(icon, title, text, browseTab, browseLabel) {
+  const container = document.getElementById('cart-items-list');
+  container.innerHTML = emptyStateHtml(
+    icon,
+    title,
+    text,
+    `<button type="button" class="r-btn r-btn--primary r-btn--pill" data-browse="${browseTab}">${escapeHtml(browseLabel)}</button>`
+  );
+  container.querySelector('[data-browse]').addEventListener('click', (e) => {
+    closeCartDrawer();
+    switchTabById(e.currentTarget.dataset.browse);
+  });
+  setCartCheckout(false);
+}
+
+function renderActiveCart() {
+  const container = document.getElementById('cart-items-list');
   const bannerIcon = document.getElementById('cart-banner-icon');
   const bannerText = document.getElementById('cart-banner-text');
+  const localCounts = JSON.parse(localStorage.getItem('smartflow_order_counts') || '{}');
+  // The banner icon is an inline SVG; only its sprite reference changes
+  const setBannerIcon = (name) => bannerIcon?.querySelector('use')?.setAttribute('href', `#i-${name}`);
 
   if (state.activeCartType === 'instamart') {
     // --- INSTAMART CART RENDERING ---
-    const localCounts = JSON.parse(localStorage.getItem('smartflow_order_counts') || '{}');
     const imCount = localCounts['instamart'] || 0;
-    const imBadgeText = imCount > 3 ? ` (Ordered ${imCount} times)` : '';
-    if (bannerIcon) bannerIcon.textContent = '⚡';
-    if (bannerText) bannerText.innerHTML = `Ordering from <strong>Swiggy Instamart</strong>${imBadgeText} • 10–15 mins delivery`;
+    const orderedTimes = imCount > 3 ? ` (ordered ${imCount} times)` : '';
+    setBannerIcon('bag');
+    if (bannerText) bannerText.innerHTML = `Ordering from <strong>Swiggy Instamart</strong>${orderedTimes}, 10 to 15 min`;
 
     const items = state.instamartCart ? state.instamartCart.items || [] : [];
     if (items.length === 0) {
-      container.innerHTML = `
-        <div style="text-align: center; padding: 3rem 1rem; color: #94a3b8;">
-          <div style="font-size: 3rem; margin-bottom: 0.8rem;">⚡</div>
-          <h3>Your Instamart cart is empty</h3>
-          <p style="font-size: 0.88rem; margin-top: 0.4rem;">Browse the Instamart Groceries tab to add milk, bread, eggs, snacks & essentials!</p>
-        </div>
-      `;
-      if (billBox) billBox.style.display = 'none';
-      if (footerEl) footerEl.style.display = 'none';
-      if (approveBtn) {
-        approveBtn.disabled = true;
-        approveBtn.style.display = 'none';
-      }
+      renderCartEmpty('bag', 'Your Instamart cart is empty.', 'Add milk, bread, eggs, snacks and daily essentials from the Instamart tab.', 'pane-instamart', 'Browse groceries');
       return;
-    }
-
-    if (footerEl) footerEl.style.display = 'block';
-    if (billBox) billBox.style.display = 'block';
-    if (approveBtn) {
-      approveBtn.disabled = false;
-      approveBtn.style.display = 'block';
-      approveBtn.style.opacity = '1';
     }
 
     container.innerHTML = '';
     let itemSubtotal = 0;
     items.forEach((item) => {
-      const el = document.createElement('div');
-      el.className = 'cart-item';
-      const itemPrice = item.price || 0;
-      const subtotal = itemPrice * item.quantity;
-      itemSubtotal += subtotal;
-
-      el.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div style="font-size: 1.4rem;">⚡</div>
-          <div>
-            <div style="font-weight: 700; font-size: 0.95rem;">${item.name}</div>
-            <div style="color: #94a3b8; font-size: 0.82rem;">${item.variant || ''} • ₹${itemPrice} each</div>
-          </div>
-        </div>
-        <div class="stepper">
-          <button class="btn-step" data-action="dec" data-id="${item.spin_id}">-</button>
-          <span class="step-qty">${item.quantity}</span>
-          <button class="btn-step" data-action="inc" data-id="${item.spin_id}">+</button>
-        </div>
-        <div style="font-weight: 700;">₹${subtotal}</div>
-      `;
-
-      el.querySelector('[data-action="dec"]').addEventListener('click', async () => {
-        await addInstamartCartItem(item.spin_id, -1);
-      });
-      el.querySelector('[data-action="inc"]').addEventListener('click', async () => {
-        await addInstamartCartItem(item.spin_id, 1);
-      });
-
-      container.appendChild(el);
+      const price = parseFloat(item.price);
+      const hasPrice = Number.isFinite(price);
+      if (hasPrice) itemSubtotal += price * item.quantity;
+      container.appendChild(cartRowEl(
+        {
+          name: item.name,
+          sub: [item.variant, hasPrice ? `₹${price} each` : ''].filter(Boolean).join(' · '),
+          qty: item.quantity,
+          amount: hasPrice ? `₹${price * item.quantity}` : '',
+          dataAttrs: `data-id="${escapeHtml(item.spin_id)}"`,
+        },
+        () => addInstamartCartItem(item.spin_id, -1, item.name),
+        () => addInstamartCartItem(item.spin_id, 1, item.name)
+      ));
     });
 
-    const totalStr = state.instamartCart.total_amount || `₹${itemSubtotal}`;
-    const breakdown = state.instamartCart && state.instamartCart.bill_breakdown;
-    let breakdownHtml = '';
-    if (breakdown && breakdown.line_items && breakdown.line_items.length > 0) {
-      breakdown.line_items.forEach((li) => {
+    // Fees and total come from the backend only; nothing is estimated here
+    const totalStr = state.instamartCart.total_amount || '';
+    const breakdown = state.instamartCart.bill_breakdown;
+    const lineItems = (breakdown && breakdown.line_items) || [];
+    let billHtml = '';
+    if (lineItems.length > 0) {
+      lineItems.forEach((li) => {
         const isFree = li.value === '0' || li.value === '₹0' || String(li.value).toLowerCase() === 'free';
-        const valColor = isFree ? '#10b981' : '#f1f5f9';
-        breakdownHtml += `
-          <div class="bill-row">
-            <span>${li.label}</span>
-            <span style="color: ${valColor}; font-weight: 600;">${isFree ? 'FREE' : li.value}</span>
-          </div>
-        `;
+        billHtml += billRowHtml(li.label, isFree ? 'Free' : li.value, { free: isFree });
       });
     } else {
-      const deliveryFee = itemSubtotal < 499 ? 30 : 0;
-      const handlingFee = 13;
-      const taxes = 5;
-      breakdownHtml += `
-        <div class="bill-row"><span>Item Total</span><span>₹${itemSubtotal}</span></div>
-        <div class="bill-row"><span>Delivery Partner Fee</span><span style="${deliveryFee === 0 ? 'color:#10b981; font-weight:600;' : ''}">${deliveryFee === 0 ? 'FREE' : '₹' + deliveryFee}</span></div>
-        <div class="bill-row"><span>Handling Fee</span><span>₹${handlingFee}</span></div>
-        <div class="bill-row"><span>Govt Taxes & Charges</span><span>₹${taxes}</span></div>
-      `;
+      billHtml += billRowHtml('Item total', `₹${itemSubtotal}`, { id: 'bill-item-total' });
     }
-    breakdownHtml += `
-      <div class="bill-row total" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.15);">
-        <span>To Pay</span>
-        <span id="bill-total-pay" style="color: #ff5200; font-weight: 800; font-size: 1.15rem;">${totalStr}</span>
-      </div>
-      <div style="font-size: 0.74rem; color: #94a3b8; margin-top: 6px; line-height: 1.35; padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
-        💡 <em>Standard Instamart dark store delivery fee (₹30) & handling fee (₹12.98) apply on orders below ₹499.</em>
-      </div>
-    `;
-    billBox.innerHTML = breakdownHtml;
-    approveBtn.textContent = `Approve & Pay Instamart • ${totalStr}`;
+    if (totalStr) billHtml += billRowHtml('To pay', totalStr, { id: 'bill-total-pay', total: true });
+    setCartCheckout(true, { billHtml, amountText: totalStr });
+    return;
+  }
 
-  } else {
-    // --- FOOD CART RENDERING ---
-    const localCounts = JSON.parse(localStorage.getItem('smartflow_order_counts') || '{}');
-    const restName = (state.cart && state.cart.restaurant_name) || (state.activeRestaurant ? state.activeRestaurant.name : 'Meghana Foods');
-    const restCount = localCounts[restName] || 0;
-    const restBadgeText = restCount > 3 ? ` (Ordered ${restCount} times)` : '';
-    if (bannerIcon) bannerIcon.textContent = '🍛';
-    if (bannerText) bannerText.innerHTML = `Ordering from <strong>${restName}</strong>${restBadgeText} • 25–30 mins`;
+  // --- FOOD CART RENDERING ---
+  const restName = (state.cart && state.cart.restaurant_name) || (state.activeRestaurant ? state.activeRestaurant.name : 'Meghana Foods');
+  const restCount = localCounts[restName] || 0;
+  const orderedTimes = restCount > 3 ? ` (ordered ${restCount} times)` : '';
+  setBannerIcon('food');
+  if (bannerText) bannerText.innerHTML = `Ordering from <strong>${escapeHtml(restName)}</strong>${orderedTimes}, 25 to 30 min`;
 
-    const items = state.cart ? state.cart.items || [] : [];
-    if (items.length === 0) {
-      container.innerHTML = `
-        <div style="text-align: center; padding: 3rem 1rem; color: #94a3b8;">
-          <div style="font-size: 3rem; margin-bottom: 0.8rem;">🍛</div>
-          <h3>Your Food cart is empty</h3>
-          <p style="font-size: 0.88rem; margin-top: 0.4rem;">Browse Meghana Foods menu or ask the AI Concierge to add delicious dishes!</p>
-        </div>
-      `;
-      if (billBox) billBox.style.display = 'none';
-      if (footerEl) footerEl.style.display = 'none';
-      if (approveBtn) {
-        approveBtn.disabled = true;
-        approveBtn.style.display = 'none';
-      }
-      return;
-    }
+  const items = state.cart ? state.cart.items || [] : [];
+  if (items.length === 0) {
+    renderCartEmpty('food', 'Your food cart is empty.', 'Browse the menu or ask the concierge to add dishes.', 'pane-menu', 'Browse menu');
+    return;
+  }
 
-    if (footerEl) footerEl.style.display = 'block';
-    if (billBox) billBox.style.display = 'block';
-    if (approveBtn) {
-      approveBtn.disabled = false;
-      approveBtn.style.display = 'block';
-      approveBtn.style.opacity = '1';
-    }
+  container.innerHTML = '';
+  items.forEach((item) => {
+    container.appendChild(cartRowEl(
+      {
+        name: item.name,
+        sub: `₹${item.price} each`,
+        qty: item.quantity,
+        amount: `₹${item.subtotal || (item.price * item.quantity)}`,
+        dataAttrs: `data-id="${escapeHtml(item.menu_item_id)}"`,
+      },
+      () => addDishToCart(item.menu_item_id, item.quantity - 1),
+      () => addDishToCart(item.menu_item_id, item.quantity + 1)
+    ));
+  });
 
-    container.innerHTML = '';
-    items.forEach((item) => {
-      const el = document.createElement('div');
-      el.className = 'cart-item';
-      el.innerHTML = `
-        <div>
-          <div style="font-weight: 700; font-size: 0.95rem;">${item.name}</div>
-          <div style="color: #94a3b8; font-size: 0.85rem;">₹${item.price} each</div>
-        </div>
-        <div class="stepper">
-          <button class="btn-step" data-action="dec" data-id="${item.menu_item_id}">-</button>
-          <span class="step-qty">${item.quantity}</span>
-          <button class="btn-step" data-action="inc" data-id="${item.menu_item_id}">+</button>
-        </div>
-        <div style="font-weight: 700;">₹${item.subtotal || (item.price * item.quantity)}</div>
-      `;
+  const pricing = state.cart.pricing;
+  if (!pricing) {
+    setCartCheckout(true);
+    return;
+  }
+  const freeDelivery = pricing.delivery_charge === 0;
+  const billHtml =
+    billRowHtml('Item total', `₹${pricing.item_total}`, { id: 'bill-item-total' }) +
+    billRowHtml('Delivery partner fee', freeDelivery ? 'Free' : `₹${pricing.delivery_charge}`, { id: 'bill-delivery-fee', free: freeDelivery }) +
+    billRowHtml('Taxes and other charges', `₹${pricing.taxes_and_charges}`, { id: 'bill-taxes' }) +
+    billRowHtml('To pay', `₹${pricing.to_pay}`, { id: 'bill-total-pay', total: true });
+  setCartCheckout(true, { billHtml, amountText: `₹${pricing.to_pay}` });
+}
 
-      el.querySelector('[data-action="dec"]').addEventListener('click', () => {
-        addDishToCart(item.menu_item_id, item.quantity - 1);
-      });
-      el.querySelector('[data-action="inc"]').addEventListener('click', () => {
-        addDishToCart(item.menu_item_id, item.quantity + 1);
-      });
+// Re-rendering replaces the focused stepper button; put focus back on its replacement.
+function renderCartDrawerItems() {
+  const container = document.getElementById('cart-items-list');
+  const focused = document.activeElement;
+  const refocus = focused && container.contains(focused) && focused.dataset.id
+    ? { id: focused.dataset.id, action: focused.dataset.action }
+    : null;
 
-      container.appendChild(el);
-    });
+  renderActiveCart();
 
-    const pricing = state.cart.pricing || { item_total: 0, delivery_charge: 0, taxes_and_charges: 0, to_pay: 0 };
-    const deliveryDisplay = pricing.delivery_charge === 0 ? '<span style="color:#10b981; font-weight:600;">FREE</span>' : `₹${pricing.delivery_charge}`;
-    billBox.innerHTML = `
-      <div class="bill-row"><span>Item Total</span><span>₹${pricing.item_total}</span></div>
-      <div class="bill-row"><span>Delivery Partner Fee</span><span>${deliveryDisplay}</span></div>
-      <div class="bill-row"><span>Govt Taxes & Restaurant Packaging</span><span>₹${pricing.taxes_and_charges}</span></div>
-      <div class="bill-row total" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.15);">
-        <span>To Pay</span>
-        <span id="bill-total-pay" style="color: #ff5200; font-weight: 800; font-size: 1.15rem;">₹${pricing.to_pay}</span>
-      </div>
-    `;
-    approveBtn.textContent = `Approve & Pay Food • ₹${pricing.to_pay}`;
+  if (refocus) {
+    const selector = `[data-id="${CSS.escape(refocus.id)}"][data-action="${refocus.action}"]`;
+    const target = container.querySelector(selector);
+    if (target) target.focus();
   }
 }
 
