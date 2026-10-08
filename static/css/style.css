@@ -440,7 +440,7 @@
 .r-call__number { margin-top: var(--sp-400); display: block }
 .r-call__status { margin-top: var(--sp-500); font: 400 var(--sp-para-md-size)/var(--sp-para-md-lh) var(--sp-font-primary); color: var(--sp-content-secondary) }
 .r-call__actions { display: flex; gap: var(--sp-500) }
-.r-call__actions > .r-btn--cta { flex: 1; min-width: 0 }
+.r-call__actions > .r-btn--cta { flex: 1 1 0; min-width: 0; padding-inline: 0 }
 .r-call .r-sheet__footer { padding-inline: var(--sp-800) }
 
 /* ---------------------------------------------------------------------------
