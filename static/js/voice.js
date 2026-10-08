@@ -1,16 +1,21 @@
 // SmartFlow Voice Assistant Module — Continuous Hands-Free Voice Mode
 class VoiceAssistant {
-  constructor(onTranscriptCallback, onStateChangeCallback, onExitCallback) {
+  constructor(onTranscriptCallback, onStateChangeCallback, onExitCallback, onErrorCallback) {
     this.onTranscript = onTranscriptCallback;
     this.onStateChange = onStateChangeCallback;
     this.onExit = onExitCallback;
+    this.onError = onErrorCallback;
     this.recognition = null;
     this.isListening = false;
     this.keepListening = false;
-    this.ttsEnabled = false; // Strictly muted as requested ("donot read the response message")
     this.restartTimeout = null;
 
     this.initRecognition();
+  }
+
+  // False when the browser has no Web Speech API; the UI should offer typing instead.
+  get isSupported() {
+    return this.recognition !== null;
   }
 
   initRecognition() {
@@ -60,10 +65,12 @@ class VoiceAssistant {
 
     this.recognition.onerror = (event) => {
       console.warn('Speech recognition event:', event.error);
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      // Permission or hardware failures cannot recover by re-arming: stop and tell the UI why
+      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
         this.keepListening = false;
         this.isListening = false;
         if (this.onStateChange) this.onStateChange(false);
+        if (this.onError) this.onError(event.error);
       }
       // For 'no-speech' or other minor events, onend will automatically re-arm if keepListening is true
     };
@@ -104,7 +111,10 @@ class VoiceAssistant {
     if (this.recognition) {
       try {
         this.recognition.stop();
-      } catch (e) {}
+      } catch (e) {
+        // stop() throws if recognition never started; the session is already stopped
+        console.log('Recognition stop status:', e.message);
+      }
     }
     this.isListening = false;
     if (this.onStateChange) this.onStateChange(false);
@@ -116,11 +126,5 @@ class VoiceAssistant {
     } else {
       this.startListening();
     }
-  }
-
-  speak(text) {
-    // Intentionally muted per user requirement:
-    // "after response donot read the response message"
-    if (!this.ttsEnabled) return;
   }
 }

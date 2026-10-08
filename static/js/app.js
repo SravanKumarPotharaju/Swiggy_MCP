@@ -963,11 +963,20 @@ function setupVoice() {
       addChatMessage('user', exitTranscript);
       addChatMessage('bot', 'Voice session ended. You can speak again anytime by tapping the mic, or type below.');
       showToast('Voice session ended');
+    },
+    // 4. On blocked or missing microphone
+    (errorCode) => {
+      showToast(
+        errorCode === 'audio-capture'
+          ? 'No microphone was found.'
+          : 'Microphone access is blocked. Allow it in your browser settings to use voice.',
+        { error: true }
+      );
     }
   );
 
   micBtn.addEventListener('click', () => {
-    if (!voice.recognition) {
+    if (!voice.isSupported) {
       showToast('Voice input is not supported in this browser. Type your order instead.', { error: true });
       return;
     }
