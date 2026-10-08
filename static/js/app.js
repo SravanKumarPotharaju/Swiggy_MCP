@@ -57,6 +57,12 @@ function escapeHtml(value) {
   ));
 }
 
+// First human-readable message in an API envelope; FastAPI validation errors put an object in detail.
+function apiErrorMessage(res, fallback) {
+  const message = [res?.detail, res?.message].find((v) => typeof v === 'string' && v);
+  return message || fallback;
+}
+
 // Icon from the inline sprite in index.html (symbol ids are "i-<name>").
 function iconUse(name, extraClass = '') {
   return `<svg class="r-icon ${extraClass}" ${SVG_STROKE_ATTRS}><use href="#i-${name}"/></svg>`;
@@ -124,10 +130,17 @@ function bindRowAction(row, handler) {
 const TOAST_DURATION_MS = 2400; // matches --sp-dur-toast
 let toastTimer = null;
 
-function showToast(message) {
+// Plain toast, or the Rally error variant (alert icon + message) with { error: true }.
+function showToast(message, { error = false } = {}) {
   const toast = document.getElementById('toast');
   if (!toast) return;
-  toast.textContent = String(message ?? '');
+  const text = String(message ?? '');
+  toast.classList.toggle('r-toast--error', error);
+  if (error) {
+    toast.innerHTML = `${iconUse('alert', 'r-toast__icon')}<div class="r-toast__body"><p class="r-toast__title">${escapeHtml(text)}</p></div>`;
+  } else {
+    toast.textContent = text;
+  }
   toast.classList.add('is-visible');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('is-visible'), TOAST_DURATION_MS);
@@ -359,11 +372,11 @@ function setupSwiggyAuthButton() {
         if (res?.success && res.data?.authorization_url) {
           window.location.assign(res.data.authorization_url);
         } else {
-          showToast(res?.detail || res?.message || 'Could not start Swiggy connect. Try the OTP sign-in.');
+          showToast(apiErrorMessage(res, 'Could not start Swiggy connect. Try the OTP sign-in.'), { error: true });
         }
       } catch (err) {
         console.warn('Direct connect failed:', err);
-        showToast('Network error while connecting to Swiggy.');
+        showToast('Network error while connecting to Swiggy.', { error: true });
       }
     }));
   }
@@ -389,7 +402,7 @@ function setupSwiggyAuthButton() {
   const handleSendOtp = (trigger) => withBusy(trigger, async () => {
     const phone = phoneInput ? phoneInput.value.trim() : '';
     if (!phone || phone.length < 10) {
-      showToast('Enter a valid 10-digit mobile number.');
+      showToast('Enter a valid 10-digit mobile number.', { error: true });
       return;
     }
     try {
@@ -401,10 +414,10 @@ function setupSwiggyAuthButton() {
         resetOtp();
         if (otpInput) otpInput.focus();
       } else {
-        showToast(res?.detail || res?.message || 'Failed to send OTP.');
+        showToast(apiErrorMessage(res, 'Failed to send OTP.'), { error: true });
       }
     } catch (err) {
-      showToast('Network error while sending OTP.');
+      showToast('Network error while sending OTP.', { error: true });
     }
   });
 
@@ -417,7 +430,7 @@ function setupSwiggyAuthButton() {
     const phone = phoneInput ? phoneInput.value.trim() : '';
     const otp = otpInput ? otpInput.value.trim() : '';
     if (!otp || otp.length !== 6) {
-      showToast('Enter the full 6-digit OTP.');
+      showToast('Enter the full 6-digit OTP.', { error: true });
       return;
     }
     try {
@@ -427,10 +440,10 @@ function setupSwiggyAuthButton() {
         closeModal();
         showToast('Swiggy connected. Cart and live orders synced.');
       } else {
-        showToast(res?.detail || res?.message || 'Invalid OTP. Try again.');
+        showToast(apiErrorMessage(res, 'Invalid OTP. Try again.'), { error: true });
       }
     } catch (err) {
-      showToast('Verification failed. Check your connection and try again.');
+      showToast('Verification failed. Check your connection and try again.', { error: true });
     }
   });
 
@@ -451,10 +464,10 @@ function setupSwiggyAuthButton() {
           window.open(res.data.authorization_url, '_blank');
           showToast('Swiggy login opened in a new tab. Enter the OTP and allow access.');
         } else {
-          showToast(res?.detail || res?.message || 'Could not start the Swiggy browser login.');
+          showToast(apiErrorMessage(res, 'Could not start the Swiggy browser login.'), { error: true });
         }
       } catch (err) {
-        showToast('Could not initiate Swiggy browser session.');
+        showToast('Could not initiate Swiggy browser session.', { error: true });
       }
     }));
   }
@@ -515,7 +528,7 @@ async function loadInitialState() {
     }
   } catch (e) {
     console.error('Error loading initial state:', e);
-    showToast('Could not connect to the backend server.');
+    showToast('Could not connect to the backend server.', { error: true });
   }
 }
 
@@ -588,7 +601,7 @@ function renderAddressModalList() {
         await api.setActiveAddress(selected);
       } catch (err) {
         console.error('Failed to set active address:', err);
-        showToast('Could not save the delivery address.');
+        showToast('Could not save the delivery address.', { error: true });
       }
       closeSheet(document.getElementById('address-modal'));
     });
@@ -757,7 +770,7 @@ function switchTabById(tabId) {
   }
 }
 
-function setCartSwitchSelected(btn, selected) {
+function setChipSelected(btn, selected) {
   if (!btn) return;
   btn.classList.toggle('r-chip--selected', selected);
   btn.setAttribute('aria-selected', String(selected));
@@ -766,8 +779,8 @@ function setCartSwitchSelected(btn, selected) {
 function openCartDrawerWithType(cartType = 'food') {
   if (cartType === 'instamart' || cartType === 'food') {
     state.activeCartType = cartType;
-    setCartSwitchSelected(document.getElementById('btn-switch-food'), cartType === 'food');
-    setCartSwitchSelected(document.getElementById('btn-switch-im'), cartType === 'instamart');
+    setChipSelected(document.getElementById('btn-switch-food'), cartType === 'food');
+    setChipSelected(document.getElementById('btn-switch-im'), cartType === 'instamart');
   }
 
   renderCartDrawerItems();
@@ -890,7 +903,7 @@ function checkClientVoiceTriggers(text) {
       await refreshCart();
       openCartDrawerWithType('food');
       showToast('Food cart cleared');
-    }).catch(() => showToast('Could not clear the food cart.'));
+    }).catch(() => showToast('Could not clear the food cart.', { error: true }));
     return true;
   }
 
@@ -900,7 +913,7 @@ function checkClientVoiceTriggers(text) {
       await refreshInstamartCart();
       openCartDrawerWithType('instamart');
       showToast('Instamart cart cleared');
-    }).catch(() => showToast('Could not clear the Instamart cart.'));
+    }).catch(() => showToast('Could not clear the Instamart cart.', { error: true }));
     return true;
   }
 
@@ -916,188 +929,197 @@ function setupTabs() {
 
 // --- VOICE ASSISTANT ---
 let voice = null;
+const MIC_IDLE_TEXT = 'Tap the mic to speak. Say "exit" to stop.';
+
 function setupVoice() {
+  const composer = document.querySelector('.r-composer');
   const micBtn = document.getElementById('mic-btn');
-  const waveBars = document.getElementById('wave-bars');
   const micStatus = document.getElementById('mic-status');
+
+  const setListeningUI = (listening) => {
+    if (composer) composer.classList.toggle('is-listening', listening);
+    micBtn.setAttribute('aria-pressed', String(listening));
+  };
 
   voice = new VoiceAssistant(
     // 1. On transcript
     async (transcript) => {
       micStatus.textContent = `"${transcript}"`;
-      
-      // Zero-latency client trigger check for voice navigation & checkout
-      checkClientVoiceTriggers(transcript);
-
-      // Send directly to chat
-      addChatMessage('user', transcript);
-      showTypingIndicator();
-      const res = await api.sendChatMessage(transcript);
-      removeTypingIndicator();
-      if (res.success && res.data) {
-        const reply = res.data.reply;
-        addChatMessage('bot', reply);
-        if (res.data.updated_address) {
-          updateHeaderLocation(res.data.updated_address, true);
-        }
-        if (res.data.ui_action) {
-          handleUIAction(res.data.ui_action);
-        } else if (res.data.cart_type === 'instamart') {
-          openCartDrawerWithType('instamart');
-        } else if (res.data.cart_type === 'food') {
-          openCartDrawerWithType('food');
-        }
-        // Refresh both carts in background
-        await Promise.all([refreshCart(), refreshInstamartCart()]);
-        if (res.data.order && res.data.order.open_payment_modal) {
-          state.activeOrder = res.data.order;
-          closeCartDrawer();
-          displayPaymentQR(res.data.order);
-        }
-      }
+      await sendAgentMessage(transcript);
       if (voice.keepListening) {
-        micStatus.textContent = '🎙️ Listening... Speak again or say "exit" to stop';
+        micStatus.textContent = 'Listening. Speak again or say "exit" to stop.';
       }
     },
     // 2. On state change
     (isListening) => {
-      if (isListening) {
-        micBtn.classList.add('listening');
-        waveBars.classList.add('active');
-        micStatus.textContent = '🎙️ Listening... Speak freely (say "exit" to stop)';
-      } else {
-        micBtn.classList.remove('listening');
-        waveBars.classList.remove('active');
-        micStatus.textContent = 'Tap microphone to speak your food order';
-      }
+      setListeningUI(isListening);
+      micStatus.textContent = isListening ? 'Listening. Speak freely, or say "exit" to stop.' : MIC_IDLE_TEXT;
     },
     // 3. On Exit keyword
     (exitTranscript) => {
-      micBtn.classList.remove('listening');
-      waveBars.classList.remove('active');
-      micStatus.textContent = 'Voice session ended. Tap microphone to speak again.';
+      setListeningUI(false);
+      micStatus.textContent = 'Voice session ended. Tap the mic to speak again.';
       addChatMessage('user', exitTranscript);
-      addChatMessage('bot', '👋 Voice session ended! You can speak again anytime by tapping the microphone or type below.');
-      showToast('🛑 Voice session ended');
+      addChatMessage('bot', 'Voice session ended. You can speak again anytime by tapping the mic, or type below.');
+      showToast('Voice session ended');
     }
   );
 
   micBtn.addEventListener('click', () => {
+    if (!voice.recognition) {
+      showToast('Voice input is not supported in this browser. Type your order instead.', { error: true });
+      return;
+    }
     voice.toggleListening();
   });
 
-  // Call my phone button
+  // Call my phone button: the call sheet is shown only once the backend confirms the
+  // call, using the number it dialled.
   const callBtn = document.getElementById('btn-call-phone');
   if (callBtn) {
-    callBtn.addEventListener('click', async () => {
-      showToast('📞 Calling your mobile (+91 9390787901)...');
-      showIncomingCallModal('SmartFlow AI Concierge', '+91 9390787901');
-      api.triggerAutomatedCall().catch((e) => console.warn('Twilio call:', e));
-    });
+    callBtn.addEventListener('click', () => withBusy(callBtn, async () => {
+      try {
+        const res = await api.triggerAutomatedCall();
+        if (res && res.success) {
+          showIncomingCallModal('SmartFlow AI Concierge', res.data?.to || '');
+        } else {
+          showToast(apiErrorMessage(res, 'Could not place the call.'), { error: true });
+        }
+      } catch (err) {
+        console.warn('Automated call failed:', err);
+        showToast('Could not place the call. Check your connection.', { error: true });
+      }
+    }));
   }
 }
 
 // --- CHAT SYSTEM ---
+// Sends one user message through the agent and applies the reply to the UI.
+// Shared by typed input, quick chips and voice transcripts.
+async function sendAgentMessage(text) {
+  // Zero-latency client trigger check for navigation and checkout phrases
+  checkClientVoiceTriggers(text);
+
+  addChatMessage('user', text);
+  showTypingIndicator();
+  let res;
+  try {
+    res = await api.sendChatMessage(text);
+  } catch (err) {
+    console.error('Chat request failed:', err);
+    showToast('Could not reach SmartFlow. Check your connection.', { error: true });
+    return;
+  } finally {
+    removeTypingIndicator();
+  }
+
+  if (!(res && res.success && res.data)) {
+    showToast(apiErrorMessage(res, 'SmartFlow could not process that message.'), { error: true });
+    return;
+  }
+
+  addChatMessage('bot', res.data.reply);
+  if (res.data.updated_address) {
+    updateHeaderLocation(res.data.updated_address, true);
+  }
+  if (res.data.ui_action) {
+    handleUIAction(res.data.ui_action);
+  } else if (res.data.cart_type === 'instamart') {
+    openCartDrawerWithType('instamart');
+  } else if (res.data.cart_type === 'food') {
+    openCartDrawerWithType('food');
+  }
+  // Refresh both carts
+  await Promise.all([refreshCart(), refreshInstamartCart()]);
+  if (res.data.order && res.data.order.open_payment_modal) {
+    state.activeOrder = res.data.order;
+    closeCartDrawer();
+    displayPaymentQR(res.data.order);
+  }
+}
+
 function setupChat() {
   const input = document.getElementById('chat-input');
   const sendBtn = document.getElementById('btn-send');
+  const composer = document.querySelector('.r-composer');
+
+  // The send button replaces the mic while the field has text
+  const syncComposerText = () => composer.classList.toggle('has-text', input.value.trim().length > 0);
 
   const handleSend = async () => {
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
-
-    // Zero-latency client trigger check for chat navigation & checkout
-    checkClientVoiceTriggers(text);
-
-    addChatMessage('user', text);
-    showTypingIndicator();
-    const res = await api.sendChatMessage(text);
-    removeTypingIndicator();
-
-    if (res.success && res.data) {
-      addChatMessage('bot', res.data.reply);
-      if (res.data.updated_address) {
-        updateHeaderLocation(res.data.updated_address, true);
-      }
-      if (res.data.ui_action) {
-        handleUIAction(res.data.ui_action);
-      } else if (res.data.cart_type === 'instamart') {
-        openCartDrawerWithType('instamart');
-      } else if (res.data.cart_type === 'food') {
-        openCartDrawerWithType('food');
-      }
-      await Promise.all([refreshCart(), refreshInstamartCart()]);
-      if (res.data.order && res.data.order.open_payment_modal) {
-        state.activeOrder = res.data.order;
-        closeCartDrawer();
-        displayPaymentQR(res.data.order);
-      }
-    }
+    syncComposerText();
+    await sendAgentMessage(text);
   };
 
   sendBtn.addEventListener('click', handleSend);
-  input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleSend();
+  input.addEventListener('input', syncComposerText);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) handleSend();
   });
 
-  // Quick Chips
-  document.querySelectorAll('.chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      input.value = chip.dataset.prompt;
-      handleSend();
-    });
+  // Quick chips (frequent-order chips are created later and bind their own handlers)
+  document.querySelectorAll('#quick-action-chips > .r-chip[data-prompt]').forEach((chip) => {
+    chip.addEventListener('click', () => sendAgentMessage(chip.dataset.prompt));
   });
 }
 
 function addChatMessage(role, text) {
   const container = document.getElementById('chat-messages');
+  const isUser = role === 'user';
   const msgEl = document.createElement('div');
-  msgEl.className = `msg ${role}`;
+  msgEl.className = `r-msg ${isUser ? 'r-msg--user' : 'r-msg--agent'}`;
 
-  const avatar = role === 'user' ? '👤' : '🍛';
-  // Formats line breaks, bold, and italic
-  let formattedText = (text || '')
+  const body = text || '';
+  // Escape first, then format line breaks, bold and italic
+  const formattedText = escapeHtml(body)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/\n/g, '<br/>');
 
-  // Interactive quick links for bot replies
-  let actionChips = '';
-  if (role === 'bot') {
-    if (text.includes('Live Map Tracking') || text.includes('Live GPS Tracking')) {
-      actionChips += `<button class="chip" style="font-size: 0.78rem; padding: 4px 10px; margin-top: 6px; background: rgba(255,82,0,0.15); border-color: rgba(255,82,0,0.4);" onclick="switchTabById('pane-tracking')">🛵 Open Live Tracking Tab</button>`;
+  // Interactive quick links for agent replies
+  const quickLinks = [];
+  if (!isUser) {
+    if (body.includes('Live Map Tracking') || body.includes('Live GPS Tracking')) {
+      quickLinks.push({ tab: 'pane-tracking', label: 'Open live tracking' });
     }
-    if (text.includes('No Active Deliveries')) {
-      actionChips += `
-        <button class="chip" style="font-size: 0.78rem; padding: 4px 10px; margin-top: 6px; margin-left: 6px; background: rgba(255,255,255,0.08); border-color: var(--border-color);" onclick="switchTabById('pane-menu')">🍛 Browse Menu</button>
-        <button class="chip" style="font-size: 0.78rem; padding: 4px 10px; margin-top: 6px; margin-left: 6px; background: rgba(16,185,129,0.15); color: #10b981; border-color: rgba(16,185,129,0.4);" onclick="switchTabById('pane-instamart')">⚡ Groceries</button>
-      `;
+    if (body.includes('No Active Deliveries')) {
+      quickLinks.push({ tab: 'pane-menu', label: 'Browse menu' }, { tab: 'pane-instamart', label: 'Groceries' });
     }
   }
 
-  msgEl.innerHTML = `
-    <div class="avatar">${avatar}</div>
-    <div class="msg-bubble">
-      ${formattedText}
-      ${actionChips ? `<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 0.5rem;">${actionChips}</div>` : ''}
-    </div>
-  `;
+  const actionsHtml = quickLinks.length
+    ? `<div class="r-msg__actions">${quickLinks
+        .map((link) => `<button type="button" class="r-chip r-chip--outline" data-tab="${link.tab}">${escapeHtml(link.label)}</button>`)
+        .join('')}</div>`
+    : '';
+
+  msgEl.innerHTML = `<div class="r-msg__bubble">${formattedText}${actionsHtml}</div>`;
+  msgEl.querySelectorAll('[data-tab]').forEach((chip) => {
+    chip.addEventListener('click', () => switchTabById(chip.dataset.tab));
+  });
   container.appendChild(msgEl);
-  container.scrollTop = container.scrollHeight;
+  // The page scrolls (not the thread); bring the end of the thread, with its composer clearance, into view
+  container.scrollIntoView({ block: 'end', behavior: 'smooth' });
 }
 
 function showTypingIndicator() {
   const container = document.getElementById('chat-messages');
   const typing = document.createElement('div');
   typing.id = 'typing-indicator';
-  typing.className = 'msg bot';
+  typing.className = 'r-msg r-msg--agent';
   typing.innerHTML = `
-    <div class="avatar">🍛</div>
-    <div class="msg-bubble" style="color: #94a3b8;">SmartFlow is thinking & checking Swiggy... ⏳</div>
+    <div class="r-typing" role="status">
+      <span class="r-visually-hidden">SmartFlow is thinking</span>
+      <span class="r-typing__dot"></span>
+      <span class="r-typing__dot"></span>
+      <span class="r-typing__dot"></span>
+    </div>
   `;
   container.appendChild(typing);
-  container.scrollTop = container.scrollHeight;
+  container.scrollIntoView({ block: 'end', behavior: 'smooth' });
 }
 
 function removeTypingIndicator() {
@@ -1115,13 +1137,15 @@ function renderMenuCategories(categories) {
   let allDishes = [];
 
   categories.forEach((cat, idx) => {
-    // Add pill
+    // Add category chip
     const pill = document.createElement('button');
-    pill.className = `cat-pill ${idx === 0 ? 'active' : ''}`;
+    pill.type = 'button';
+    pill.className = 'r-chip';
+    pill.setAttribute('role', 'tab');
     pill.textContent = `${cat.title} (${cat.items.length})`;
+    setChipSelected(pill, idx === 0);
     pill.addEventListener('click', () => {
-      document.querySelectorAll('.cat-pill').forEach((p) => p.classList.remove('active'));
-      pill.classList.add('active');
+      filterContainer.querySelectorAll('.r-chip').forEach((p) => setChipSelected(p, p === pill));
       renderDishes(cat.items);
     });
     filterContainer.appendChild(pill);
@@ -1143,27 +1167,34 @@ function renderDishes(items) {
   gridContainer.innerHTML = '';
 
   items.forEach((item) => {
-    const card = document.createElement('div');
-    card.className = 'dish-card';
+    const card = document.createElement('article');
+    card.className = 'r-dish r-card';
 
-    const vegClass = item.is_veg ? 'veg' : 'non-veg';
-    const imgUrl = item.image_url || 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=400&q=80';
+    const unavailable = item.in_stock === false;
+    const vegClass = item.is_veg ? 'r-dish__veg--veg' : 'r-dish__veg--nonveg';
+    const vegLabel = item.is_veg ? 'Vegetarian' : 'Non-vegetarian';
+    const media = item.image_url
+      ? `<img class="r-dish__img" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" loading="lazy" />`
+      : '<span class="r-dish__img" aria-hidden="true"></span>';
+    const addLabel = unavailable ? '' : ` aria-label="Add ${escapeHtml(item.name)}"`;
 
     card.innerHTML = `
-      <div class="dish-details">
-        <span class="dish-veg-badge ${vegClass}"></span>
-        <h4 class="dish-name">${item.name}</h4>
-        <div class="dish-price">₹${item.price}</div>
-        <p class="dish-desc">${item.description || 'Authentic Andhra style preparation with aromatic basmati rice & signature spices.'}</p>
+      <div class="r-dish__body">
+        <span class="r-dish__veg ${vegClass}" role="img" aria-label="${vegLabel}"></span>
+        <h3 class="r-dish__name">${escapeHtml(item.name)}</h3>
+        <p class="r-dish__price">₹${escapeHtml(item.price)}</p>
+        ${item.description ? `<p class="r-dish__desc">${escapeHtml(item.description)}</p>` : ''}
       </div>
-      <div class="dish-img-wrapper">
-        <img class="dish-img" src="${imgUrl}" alt="${item.name}" loading="lazy"/>
-        <button class="btn-add-dish" data-id="${item.id}">ADD +</button>
+      <div class="r-dish__media">
+        ${media}
+        <div class="r-dish__action">
+          <button type="button" class="r-btn r-btn--secondary r-btn--sm r-btn--pill"${addLabel}${unavailable ? ' disabled' : ''}>${unavailable ? 'Unavailable' : 'Add'}</button>
+        </div>
       </div>
     `;
 
     // Add button handler
-    card.querySelector('.btn-add-dish').addEventListener('click', () => {
+    card.querySelector('.r-dish__action button').addEventListener('click', () => {
       handleDishAddClick(item);
     });
 
@@ -1191,10 +1222,12 @@ async function addDishToCart(itemId, quantity = 1) {
       persistCarts();
       updateCartBadge();
       renderCartDrawerItems();
-      showToast('✅ Added to cart! Total: ₹' + (state.cart.pricing ? state.cart.pricing.to_pay : ''));
+      showToast('Added to cart. Total: ₹' + (state.cart.pricing ? state.cart.pricing.to_pay : ''));
+    } else {
+      showToast(apiErrorMessage(res, 'Could not add the item to your cart.'), { error: true });
     }
   } catch (e) {
-    showToast('⚠️ Error adding to cart.');
+    showToast('Error adding to cart.', { error: true });
   }
 }
 
@@ -1209,7 +1242,7 @@ function openAddonsModal(dish) {
   modal.querySelectorAll('input[type="checkbox"]').forEach((cb) => (cb.checked = false));
   updateAddonTotal();
 
-  modal.classList.add('open');
+  openSheet(modal);
 }
 
 function updateAddonTotal() {
@@ -1218,7 +1251,7 @@ function updateAddonTotal() {
   modal.querySelectorAll('input[type="checkbox"]:checked').forEach((cb) => {
     total += parseFloat(cb.dataset.price || 0);
   });
-  document.getElementById('addon-total-btn').textContent = `Add to Cart • ₹${total}`;
+  setButtonAmount(document.getElementById('addon-total-btn'), `₹${total}`);
 }
 
 // --- SWIGGY INSTAMART TAB CONTROLLER ---
