@@ -419,6 +419,8 @@ async def checkout_instamart(request: Request, body: InstamartCheckoutRequest):
         )
     except ValueError as e:
         raise HTTPException(status_code=409 if "confirmation" in str(e).lower() else 400, detail=str(e))
+    except MCPAuthenticationError as e:
+        raise HTTPException(status_code=401, detail=str(e))
     except (MCPConnectionError, MCPToolError) as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:

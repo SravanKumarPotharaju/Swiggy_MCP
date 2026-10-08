@@ -103,6 +103,21 @@ def test_checkout_route_returns_error_not_confirmed_order_on_auth_failure():
     assert called_tools(mock_call) == ["get_cart", "checkout"]
 
 
+def test_checkout_route_maps_an_expired_session_to_401():
+    message = "Instamart session has expired. Please re-authenticate."
+    mock_call = mcp_tools(get_cart=CART, checkout=MCPAuthenticationError(message))
+
+    with patch.object(instamart_service.client, "call_tool", mock_call):
+        res = TestClient(app).post(
+            f"{settings.API_V1_PREFIX}/instamart/checkout",
+            json={"payment_method": "UPI", "user_confirmed": True},
+        )
+
+    assert res.status_code == 401
+    assert res.json() == {"detail": message}
+    assert called_tools(mock_call) == ["get_cart", "checkout"]
+
+
 @pytest.mark.asyncio
 async def test_checkout_response_without_order_id_raises():
     service = InstamartService()
