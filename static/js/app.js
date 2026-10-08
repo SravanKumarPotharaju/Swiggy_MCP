@@ -97,6 +97,29 @@ function setButtonAmount(btn, amountText) {
   if (slot) slot.textContent = amountText || '';
 }
 
+// Rally empty state (.r-empty). actionsHtml is trusted markup built by the caller.
+function emptyStateHtml(icon, title, text, actionsHtml = '') {
+  return `
+    <div class="r-empty">
+      <div class="r-empty__icon">${iconUse(icon)}</div>
+      <h3 class="r-empty__title">${escapeHtml(title)}</h3>
+      <p class="r-empty__text">${escapeHtml(text)}</p>
+      ${actionsHtml ? `<div class="r-empty__actions">${actionsHtml}</div>` : ''}
+    </div>
+  `;
+}
+
+// Clickable list row: button semantics plus Enter/Space activation.
+function bindRowAction(row, handler) {
+  row.addEventListener('click', handler);
+  row.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handler(e);
+    }
+  });
+}
+
 // --- TOAST ---
 const TOAST_DURATION_MS = 2400; // matches --sp-dur-toast
 let toastTimer = null;
@@ -508,15 +531,14 @@ function updateHeaderLocation(address, pulse = true) {
   const pill = document.getElementById('header-location');
   if (pill) {
     pill.innerHTML = `
-      <span>📍</span>
-      <span>Deliver to: <strong>${tag}</strong> ${displayLine}</span>
-      <span style="font-size: 0.72rem; color: #ff5200; margin-left: 4px;">▼</span>
+      ${iconUse('pin', 'r-icon--sm')}
+      <span>Deliver to <strong>${escapeHtml(tag)}</strong> ${escapeHtml(displayLine)}</span>
     `;
     if (pulse) {
-      pill.classList.remove('pulse-update');
-      void pill.offsetWidth; // Force CSS reflow
-      pill.classList.add('pulse-update');
-      showToast(`📍 Deliver to: ${tag}`);
+      pill.classList.remove('r-scale-in');
+      void pill.offsetWidth; // Force CSS reflow so the animation restarts
+      pill.classList.add('r-scale-in');
+      showToast(`Deliver to ${tag}`);
     }
   }
 
@@ -530,7 +552,7 @@ function renderAddressModalList() {
 
   const addresses = state.savedAddresses || [];
   if (addresses.length === 0) {
-    listEl.innerHTML = `<p style="color:#94a3b8; font-size:0.85rem; padding: 0.5rem 0;">No saved addresses found.</p>`;
+    listEl.innerHTML = `<li>${emptyStateHtml('pin', 'No saved addresses.', 'Your saved Swiggy addresses will show up here.')}</li>`;
     return;
   }
 
@@ -538,38 +560,37 @@ function renderAddressModalList() {
   const currentId = state.defaultAddress ? (state.defaultAddress.id || '') : '';
 
   listEl.innerHTML = addresses
-    .map((addr) => {
+    .map((addr, idx) => {
       const tag = addr.addressTag || addr.label || addr.addressCategory || 'Address';
       const line = addr.addressLine || addr.display_text || addr.fullAddress || '';
       const locality = addr.locality || addr.city || '';
       const isActive = (currentId && addr.id === currentId) || (currentTag && tag.toLowerCase() === currentTag.toLowerCase());
 
       return `
-        <div class="address-card ${isActive ? 'active' : ''}" data-id="${addr.id || ''}">
-          <div class="address-card-info">
-            <h4>${isActive ? '🟢 ' : '📍 '}${tag}</h4>
-            <p>${line}${locality ? ', ' + locality : ''}</p>
+        <li class="r-row r-row--interactive${isActive ? ' r-row--selected' : ''}" role="button" tabindex="0" data-index="${idx}"${isActive ? ' aria-current="true"' : ''}>
+          <span class="r-row__lead"><span class="r-avatar">${iconUse('pin')}</span></span>
+          <div class="r-row__main">
+            <p class="r-row__title">${escapeHtml(tag)}</p>
+            <p class="r-row__sub">${escapeHtml(line + (locality ? ', ' + locality : ''))}</p>
           </div>
-          <span class="address-card-badge">${isActive ? 'ACTIVE' : 'SELECT'}</span>
-        </div>
+          <span class="r-row__trail"><span class="r-check"><span class="r-check__box"></span></span></span>
+        </li>
       `;
     })
     .join('');
 
-  // Add click listener to each card
-  listEl.querySelectorAll('.address-card').forEach((card, idx) => {
-    card.addEventListener('click', async () => {
-      const selected = addresses[idx];
-      if (selected) {
-        updateHeaderLocation(selected, true);
-        try {
-          await api.setActiveAddress(selected);
-        } catch (err) {
-          console.error('Failed to set active address:', err);
-        }
-        const modal = document.getElementById('address-modal');
-        if (modal) modal.classList.remove('open');
+  listEl.querySelectorAll('.r-row').forEach((row) => {
+    bindRowAction(row, async () => {
+      const selected = addresses[Number(row.dataset.index)];
+      if (!selected) return;
+      updateHeaderLocation(selected, true);
+      try {
+        await api.setActiveAddress(selected);
+      } catch (err) {
+        console.error('Failed to set active address:', err);
+        showToast('Could not save the delivery address.');
       }
+      closeSheet(document.getElementById('address-modal'));
     });
   });
 }
@@ -616,15 +637,17 @@ async function updateFrequentOrderSuggestions() {
         .sort((a, b) => b.count - a.count);
 
       if (qualifiedForNavTab.length > 0) {
+        const activeName = (state.activeRestaurant ? state.activeRestaurant.name : '').toLowerCase();
         qualifiedForNavTab.forEach((r) => {
-          const tabBtn = document.createElement('button');
-          tabBtn.className = 'tab-btn restaurant-nav-pill';
-          tabBtn.dataset.target = 'pane-menu';
-          tabBtn.innerHTML = `<span>📋</span><span>${r.name} Menu & Add-ons</span>`;
-          tabBtn.addEventListener('click', () => {
-            switchTabById('pane-menu');
-          });
-          navPillsContainer.appendChild(tabBtn);
+          const isCurrent = r.name.toLowerCase() === activeName;
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = `r-chip${isCurrent ? ' r-chip--selected' : ''}`;
+          chip.setAttribute('role', 'tab');
+          chip.setAttribute('aria-selected', String(isCurrent));
+          chip.textContent = r.name;
+          chip.addEventListener('click', () => switchTabById('pane-menu'));
+          navPillsContainer.appendChild(chip);
         });
       }
     }
@@ -641,11 +664,10 @@ async function updateFrequentOrderSuggestions() {
     if (qualifiedRests.length > 0 && container) {
       qualifiedRests.forEach((r) => {
         const btn = document.createElement('button');
-        btn.className = 'chip frequent-chip';
-        btn.style.borderColor = 'rgba(255, 82, 0, 0.4)';
-        btn.style.background = 'rgba(255, 82, 0, 0.12)';
+        btn.type = 'button';
+        btn.className = 'r-chip';
         btn.dataset.prompt = `Order from ${r.name}`;
-        btn.innerHTML = `🍗 ${r.name} <strong>(Ordered ${r.count} times)</strong>`;
+        btn.textContent = `${r.name} (ordered ${r.count} times)`;
         btn.addEventListener('click', () => {
           const input = document.getElementById('chat-input');
           if (input) {
@@ -660,8 +682,8 @@ async function updateFrequentOrderSuggestions() {
       const activeRestName = state.activeRestaurant ? state.activeRestaurant.name : 'Meghana Foods';
       const match = qualifiedRests.find((r) => r.name.toLowerCase() === activeRestName.toLowerCase());
       if (match && restBadge) {
-        restBadge.textContent = `⭐ Ordered ${match.count} times`;
-        restBadge.style.display = 'inline-block';
+        restBadge.textContent = `Ordered ${match.count} times`;
+        restBadge.style.display = '';
       }
     } else {
       if (restBadge) restBadge.style.display = 'none';
@@ -670,22 +692,21 @@ async function updateFrequentOrderSuggestions() {
     // 2. Instamart suggestion: ONLY show if > 3 times
     if (imCount > 3 && container) {
       const imBtn = document.createElement('button');
-      imBtn.className = 'chip frequent-chip';
-      imBtn.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-      imBtn.style.background = 'rgba(16, 185, 129, 0.12)';
+      imBtn.type = 'button';
+      imBtn.className = 'r-chip';
       imBtn.dataset.prompt = 'Open Instamart groceries';
-      imBtn.innerHTML = `⚡ Instamart <strong>(Ordered ${imCount} times)</strong>`;
+      imBtn.textContent = `Instamart (ordered ${imCount} times)`;
       imBtn.addEventListener('click', () => {
         openCartDrawerWithType('instamart');
       });
       container.appendChild(imBtn);
 
       if (imBadge) {
-        imBadge.textContent = `⚡ SWIGGY INSTAMART • ORDERED ${imCount} TIMES`;
+        imBadge.textContent = `Instamart, ordered ${imCount} times`;
       }
     } else {
       if (imBadge) {
-        imBadge.textContent = '⚡ SWIGGY INSTAMART • 10–15 MINS';
+        imBadge.textContent = 'Instamart, 10 to 15 min';
       }
     }
   } catch (err) {
@@ -710,21 +731,20 @@ function recordCompletedOrder(restaurantName, isInstamart = false) {
 
 // --- TABS & NAVIGATION HELPERS ---
 function switchTabById(tabId) {
-  const tabs = document.querySelectorAll('.tab-btn');
-  const panes = document.querySelectorAll('.tab-pane');
-  tabs.forEach((t) => {
-    if (t.dataset.target === tabId) {
-      t.classList.add('active');
+  document.querySelectorAll('.r-tabbar__tab').forEach((t) => {
+    const isTarget = t.dataset.target === tabId;
+    t.classList.toggle('is-active', isTarget);
+    t.setAttribute('aria-selected', String(isTarget));
+    if (isTarget) {
+      t.setAttribute('aria-current', 'page');
     } else {
-      t.classList.remove('active');
+      t.removeAttribute('aria-current');
     }
   });
-  panes.forEach((p) => {
-    if (p.id === tabId) {
-      p.classList.add('active');
-    } else {
-      p.classList.remove('active');
-    }
+  document.querySelectorAll('.r-screen').forEach((p) => {
+    const isTarget = p.id === tabId;
+    p.classList.toggle('is-active', isTarget);
+    p.hidden = !isTarget;
   });
 
   const targetPane = document.getElementById(tabId);
@@ -737,28 +757,25 @@ function switchTabById(tabId) {
   }
 }
 
-function openCartDrawerWithType(cartType = 'food') {
-  const overlay = document.getElementById('cart-drawer-overlay');
-  const switchFood = document.getElementById('btn-switch-food');
-  const switchIm = document.getElementById('btn-switch-im');
+function setCartSwitchSelected(btn, selected) {
+  if (!btn) return;
+  btn.classList.toggle('r-chip--selected', selected);
+  btn.setAttribute('aria-selected', String(selected));
+}
 
-  if (cartType === 'instamart') {
-    state.activeCartType = 'instamart';
-    if (switchIm) switchIm.classList.add('active');
-    if (switchFood) switchFood.classList.remove('active');
-  } else if (cartType === 'food') {
-    state.activeCartType = 'food';
-    if (switchFood) switchFood.classList.add('active');
-    if (switchIm) switchIm.classList.remove('active');
+function openCartDrawerWithType(cartType = 'food') {
+  if (cartType === 'instamart' || cartType === 'food') {
+    state.activeCartType = cartType;
+    setCartSwitchSelected(document.getElementById('btn-switch-food'), cartType === 'food');
+    setCartSwitchSelected(document.getElementById('btn-switch-im'), cartType === 'instamart');
   }
 
   renderCartDrawerItems();
-  if (overlay) overlay.classList.add('open');
+  openSheet(document.getElementById('cart-drawer-overlay'));
 }
 
 function closeCartDrawer() {
-  const overlay = document.getElementById('cart-drawer-overlay');
-  if (overlay) overlay.classList.remove('open');
+  closeSheet(document.getElementById('cart-drawer-overlay'));
 }
 
 function handleUIAction(uiAction) {
@@ -801,7 +818,7 @@ function checkClientVoiceTriggers(text) {
     /\b(go\s*to|open|show|view|switch\s*to|navigate\s*to)\s+(the\s+)?(instamart|grocery|groceries)\s*cart\b/.test(clean)
   ) {
     openCartDrawerWithType('instamart');
-    showToast('⚡ Switched to Instamart Cart');
+    showToast('Switched to Instamart cart');
     return true;
   }
 
@@ -811,21 +828,21 @@ function checkClientVoiceTriggers(text) {
     /\b(go\s*to|open|show|view|switch\s*to|navigate\s*to)\s+(the\s+)?food\s*cart\b/.test(clean)
   ) {
     openCartDrawerWithType('food');
-    showToast('🍛 Switched to Food Cart');
+    showToast('Switched to food cart');
     return true;
   }
 
   // 3. Open Generic Cart
   if (/^\s*(open|show|view|navigate\s*to|go\s*to)?\s*(my\s+)?cart\s*$/.test(clean)) {
     openCartDrawerWithType(state.activeCartType || 'food');
-    showToast('🛒 Opened Cart Drawer');
+    showToast('Opened cart');
     return true;
   }
 
   // 4. Close Cart
   if (/\b(close|hide|dismiss)\s*(the\s*)?cart\b/.test(clean)) {
     closeCartDrawer();
-    showToast('Closed Cart Drawer');
+    showToast('Closed cart');
     return true;
   }
 
@@ -842,14 +859,14 @@ function checkClientVoiceTriggers(text) {
   // 6. Tab Navigation: Menu
   if (/\b(show\s*menu|open\s*menu|food\s*menu|meghana\s*menu|browse\s*menu|food\s*tab)\b/.test(clean) || clean === 'menu') {
     switchTabById('pane-menu');
-    showToast('📋 Switched to Meghana Menu');
+    showToast('Switched to Meghana menu');
     return true;
   }
 
   // 7. Tab Navigation: Instamart Groceries
   if (/\b(open\s*instamart|show\s*instamart|instamart\s*tab|browse\s*groceries|grocery\s*tab|show\s*groceries)\b/.test(clean) || clean === 'instamart' || clean === 'groceries') {
     switchTabById('pane-instamart');
-    showToast('⚡ Switched to Instamart Groceries');
+    showToast('Switched to Instamart groceries');
     return true;
   }
 
@@ -862,7 +879,7 @@ function checkClientVoiceTriggers(text) {
     clean === 'track'
   ) {
     switchTabById('pane-tracking');
-    showToast('🛵 Switched to Live Tracking');
+    showToast('Switched to live tracking');
     return true;
   }
 
@@ -872,8 +889,8 @@ function checkClientVoiceTriggers(text) {
     api.clearCart().then(async () => {
       await refreshCart();
       openCartDrawerWithType('food');
-      showToast('🍛 Food Cart cleared');
-    });
+      showToast('Food cart cleared');
+    }).catch(() => showToast('Could not clear the food cart.'));
     return true;
   }
 
@@ -882,8 +899,8 @@ function checkClientVoiceTriggers(text) {
     api.clearInstamartCart().then(async () => {
       await refreshInstamartCart();
       openCartDrawerWithType('instamart');
-      showToast('⚡ Instamart Cart cleared');
-    });
+      showToast('Instamart cart cleared');
+    }).catch(() => showToast('Could not clear the Instamart cart.'));
     return true;
   }
 
@@ -892,11 +909,8 @@ function checkClientVoiceTriggers(text) {
 
 // --- TABS CONTROLLER ---
 function setupTabs() {
-  const tabs = document.querySelectorAll('.tab-btn');
-  tabs.forEach((tab) => {
-    tab.addEventListener('click', () => {
-      switchTabById(tab.dataset.target);
-    });
+  document.querySelectorAll('.r-tabbar__tab').forEach((tab) => {
+    tab.addEventListener('click', () => switchTabById(tab.dataset.target));
   });
 }
 
