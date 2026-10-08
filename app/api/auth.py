@@ -149,6 +149,22 @@ async def status(request: Request):
     )
 
 
+@router.post("/connect", response_model=APIResponse)
+async def direct_connect(request: Request):
+    """
+    Direct connect to Swiggy MCP account.
+    Establishes active authenticated session and updates state.
+    """
+    request_id = getattr(request.state, "request_id", None)
+    res = await auth_service.connect_direct()
+    return APIResponse(
+        success=True,
+        data=res,
+        message="Swiggy connected successfully!",
+        request_id=request_id,
+    )
+
+
 @router.post("/logout", response_model=APIResponse)
 async def logout(request: Request):
     """

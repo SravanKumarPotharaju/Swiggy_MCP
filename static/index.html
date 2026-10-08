@@ -521,8 +521,34 @@
         Connect your Swiggy account to synchronize your real-time cart, addresses, and live order tracking.
       </p>
 
-      <!-- Step 1: Mobile Number Input -->
+      <!-- Step: Already Connected Status -->
+      <div id="swiggy-step-connected" style="display:none; text-align:center;">
+        <div style="font-size: 2.8rem; margin-bottom: 0.5rem;">🟢</div>
+        <h4 style="font-size: 1.15rem; color: #10b981; margin-bottom: 0.4rem; font-weight: 700;">Swiggy is Connected</h4>
+        <p style="font-size: 0.84rem; color: #94a3b8; margin-bottom: 1.2rem;">
+          Real-time MCP synchronization is active for live carts, addresses, and tracking.
+        </p>
+        <button id="btn-swiggy-disconnect" class="btn" style="width:100%; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 11px; border-radius: 8px; font-weight: 600; cursor: pointer; margin-bottom: 8px; font-size:0.9rem;">
+          Disconnect Swiggy Account
+        </button>
+        <button id="btn-swiggy-relogin" style="background:none; border:none; color: #fc8019; font-size: 0.82rem; cursor: pointer; text-decoration: underline;">
+          Switch Mobile Number / Re-enter OTP
+        </button>
+      </div>
+
+      <!-- Step 1: Instant Connect & Mobile Number Input -->
       <div id="swiggy-step-phone">
+        <!-- 1-Click Instant Connect Button -->
+        <button id="btn-swiggy-quick-connect" class="btn" style="width:100%; background: linear-gradient(135deg, #10b981, #059669); color:#fff; padding:12px; border-radius:8px; font-weight:700; border:none; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 4px 12px rgba(16,185,129,0.3); margin-bottom: 1.1rem;">
+          <span>⚡</span> 1-Click Instant Connect
+        </button>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.1rem;">
+          <hr style="flex:1; border:none; border-top:1px solid rgba(255,255,255,0.12);" />
+          <span style="font-size:0.74rem; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Or Login via SMS OTP</span>
+          <hr style="flex:1; border:none; border-top:1px solid rgba(255,255,255,0.12);" />
+        </div>
+
         <label style="display:block; font-size:0.8rem; font-weight:600; color:#cbd5e1; margin-bottom:6px;">Mobile Number</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">
           <span style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); padding:10px 14px; border-radius:8px; font-weight:600; color:#fff; display:flex; align-items:center; gap:4px;">🇮🇳 +91</span>

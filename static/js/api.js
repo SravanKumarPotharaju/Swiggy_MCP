@@ -202,4 +202,20 @@ const api = {
     });
     return await res.json();
   },
+
+  async directConnectSwiggy() {
+    const res = await fetch(`${API_BASE}/auth/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return await res.json();
+  },
+
+  async logoutSwiggy() {
+    const res = await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return await res.json();
+  },
 };
