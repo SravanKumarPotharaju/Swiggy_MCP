@@ -39,13 +39,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Credentials are only ever granted to the explicit origins in settings.CORS_ALLOWED_ORIGINS.
+# The UI is served same-origin from "/", so this only governs separate front-ends. Methods and
+# headers cover what the UI and API clients send: Content-Type on JSON bodies, Authorization, and
+# X-Request-ID (read, and echoed back with X-Process-Time, by the middleware below).
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r".*",
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-Process-Time"],
 )
 
 

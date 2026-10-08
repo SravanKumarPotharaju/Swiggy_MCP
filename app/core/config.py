@@ -1,5 +1,6 @@
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Union
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +33,16 @@ class Settings(BaseSettings):
     SWIGGY_CLIENT_SECRET: Optional[str] = None
     RENDER_EXTERNAL_URL: Optional[str] = None
 
+    # CORS: origins allowed to make credentialed cross-origin requests. Comma-separated in the
+    # environment ("https://a.example,https://b.example"); RENDER_EXTERNAL_URL is added automatically.
+    # Declared as a Union so pydantic-settings passes a plain comma string through to the
+    # validator below instead of failing to JSON-decode it as a list.
+    CORS_ALLOWED_ORIGINS: Union[list[str], str] = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+    ]
+
     # Delivery & Arrival Defaults
     ARRIVAL_ALERT_THRESHOLD_MINUTES: int = 2
 
@@ -44,6 +55,23 @@ class Settings(BaseSettings):
 
     # Google Gemini Configuration
     GEMINI_API_KEY: Optional[str] = None
+
+    @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def split_cors_origins(cls, value: object) -> object:
+        return value.split(",") if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def finalize_cors_origins(self) -> "Settings":
+        origins = [origin.strip().rstrip("/") for origin in self.CORS_ALLOWED_ORIGINS]
+        origins.append((self.RENDER_EXTERNAL_URL or "").strip().rstrip("/"))
+        origins = list(dict.fromkeys(origin for origin in origins if origin))
+        if "*" in origins:
+            raise ValueError(
+                "CORS_ALLOWED_ORIGINS must list explicit origins; '*' is not allowed while credentials are enabled"
+            )
+        self.CORS_ALLOWED_ORIGINS = origins
+        return self
 
 
 @lru_cache
