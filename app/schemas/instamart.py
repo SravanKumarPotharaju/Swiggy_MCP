@@ -37,7 +37,7 @@ class InstamartAddressCreateRequest(BaseModel):
     address_category: Optional[str] = Field("HOME", description="HOME, WORK, or OTHER")
     address_tag: Optional[str] = Field("Home", description="Display label tag")
     user_name: Optional[str] = Field("Sravan Kumar", description="Recipient name")
-    user_phone: Optional[str] = Field("9390787901", description="10-digit mobile number")
+    user_phone: Optional[str] = Field(None, description="10-digit mobile number")
 
 
 # --- DISCOVERY SCHEMAS (Prepared for Phase 6 & 7) ---

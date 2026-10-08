@@ -355,7 +355,6 @@ def update_delivery_address_tool(
             "addressCategory": "HOME",
             "addressTag": address_tag,
             "userName": "Sravan Kumar",
-            "userPhone": "9390787901",
         }
         res = run_async_safe(mcp_client.call_tool("create_address", args))
         new_id = res.get("structuredContent", {}).get("addressId") or "addr_custom"

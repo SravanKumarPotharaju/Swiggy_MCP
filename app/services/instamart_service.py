@@ -545,7 +545,6 @@ class InstamartService:
                 id=addr_id,
                 label=saved.get("addressTag", "Home") if saved else "Home",
                 display_text=addr_line,
-                phone_number="9390787901",
                 category="HOME",
                 is_default=True,
                 raw=saved or {},

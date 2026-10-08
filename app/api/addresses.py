@@ -26,14 +26,12 @@ async def get_addresses(request: Request):
                 id=addr_id,
                 label=saved.get("addressTag", "Home") if saved else "Home",
                 display_text=addr_line,
-                phone_number="9390787901",
                 is_default=True,
             ),
             NormalizedAddress(
                 id="addr_work_1",
                 label="Work",
                 display_text="Indiranagar 100ft Road, Bengaluru, Karnataka 560038",
-                phone_number="9390787901",
                 is_default=False,
             ),
         ]
