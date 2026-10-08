@@ -2078,37 +2078,42 @@ function initLiveMap() {
     maxZoom: 19,
   }).addTo(liveMap);
 
-  const createEmojiMarker = (emoji, className = '') => {
+  // Rally pins (.r-map__pin): an icon in a round pin, or the plain blue dot when no icon is given
+  const createPin = (variantClass, iconName) => {
+    const size = iconName ? 28 : 16;
     return L.divIcon({
-      className: `map-marker-icon ${className}`,
-      html: `<span>${emoji}</span>`,
-      iconSize: [38, 38],
-      iconAnchor: [19, 19],
-      popupAnchor: [0, -20],
+      className: `r-map__pin ${variantClass}`.trim(),
+      html: iconName ? iconUse(iconName) : '',
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      popupAnchor: [0, -(size / 2 + 2)],
     });
   };
 
   // 1. Restaurant Marker
   restaurantMarker = L.marker(RESTAURANT_COORDS, {
-    icon: createEmojiMarker('🍛'),
+    icon: createPin('', 'food'),
+    title: 'Restaurant',
   }).addTo(liveMap).bindPopup('<strong>Meghana Foods</strong><br/>Rajajinagar 1st Block, Bengaluru');
 
   // 2. Home Gate Marker
   homeMarker = L.marker(HOME_COORDS, {
-    icon: createEmojiMarker('🏠'),
+    icon: createPin('r-map__pin--user'),
+    title: 'Delivery gate',
   }).addTo(liveMap).bindPopup('<strong>Delivery Location (Gate)</strong><br/>Srinivasa P.G., Rajajinagar');
 
-  // 3. Route Polyline
+  // 3. Route Polyline (ink, from the Rally token)
   routePolyline = L.polyline(DELIVERY_ROUTE, {
-    color: '#ff5200',
-    weight: 5,
+    color: getComputedStyle(document.documentElement).getPropertyValue('--sp-content-primary').trim(),
+    weight: 4,
     opacity: 0.85,
     dashArray: '8, 8',
   }).addTo(liveMap);
 
   // 4. Rider Marker initially at restaurant
   riderMarker = L.marker(RESTAURANT_COORDS, {
-    icon: createEmojiMarker('🛵', 'map-marker-rider'),
+    icon: createPin('r-map__pin--selected', 'scooter'),
+    title: 'Delivery partner',
   }).addTo(liveMap).bindPopup('<strong>Rider: Ravi Kumar</strong><br/>TVS Jupiter (KA 02 HK 4921)');
 
   liveMap.fitBounds(routePolyline.getBounds(), { padding: [40, 40] });
@@ -2119,7 +2124,7 @@ function moveRiderTo(coords, statusText = '') {
   if (!riderMarker || !liveMap) return;
   riderMarker.setLatLng(coords);
   if (statusText) {
-    riderMarker.setPopupContent(`<strong>Rider: Ravi Kumar</strong><br/>${statusText}`);
+    riderMarker.setPopupContent(`<strong>Rider: Ravi Kumar</strong><br/>${escapeHtml(statusText)}`);
   }
 }
 
@@ -2180,18 +2185,21 @@ function stopRingtone() {
   }
 }
 
-function showIncomingCallModal(callerName = 'Swiggy Concierge / Rider Ravi', callerNumber = '+91 80 6746 6746 (Rajajinagar Hub)') {
+function showIncomingCallModal(callerName, callerNumber = '') {
   const overlay = document.getElementById('phone-call-overlay');
   if (!overlay) return;
 
-  document.getElementById('call-status-label').textContent = 'INCOMING CALL';
+  document.getElementById('call-status-label').textContent = 'Incoming call';
   document.getElementById('call-caller-name').textContent = callerName;
-  document.getElementById('call-number').textContent = callerNumber;
-  document.getElementById('call-incoming-actions').style.display = 'flex';
+  const numberEl = document.getElementById('call-number');
+  numberEl.textContent = callerNumber;
+  numberEl.hidden = !callerNumber;
+  // .r-call__actions is a flex row: clearing the inline style restores it
+  document.getElementById('call-incoming-actions').style.display = '';
   document.getElementById('call-active-actions').style.display = 'none';
   document.getElementById('call-active-timer').style.display = 'none';
 
-  overlay.classList.add('open');
+  openSheet(overlay);
   startRingtone();
 }
 
@@ -2205,12 +2213,12 @@ function setupPhoneCallOverlay() {
   if (acceptBtn) {
     acceptBtn.addEventListener('click', () => {
       stopRingtone();
-      document.getElementById('call-status-label').textContent = 'CALL IN PROGRESS';
+      document.getElementById('call-status-label').textContent = 'Call in progress';
       document.getElementById('call-incoming-actions').style.display = 'none';
-      document.getElementById('call-active-actions').style.display = 'flex';
+      document.getElementById('call-active-actions').style.display = '';
 
       const timerEl = document.getElementById('call-active-timer');
-      timerEl.style.display = 'block';
+      timerEl.style.display = '';
       timerEl.textContent = '00:00';
 
       let callSeconds = 0;
@@ -2226,7 +2234,7 @@ function setupPhoneCallOverlay() {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const speechMsg = new SpeechSynthesisUtterance(
-          "Hello Sravan! This is your Swiggy delivery partner Ravi Kumar. I have reached the main road and will be at your building gate in Rajajinagar in 2 minutes. Please come downstairs to collect your hot Meghana Foods order."
+          "Hello! This is your Swiggy delivery partner Ravi Kumar. I have reached the main road and will be at your building gate in Rajajinagar in 2 minutes. Please come downstairs to collect your hot Meghana Foods order."
         );
         speechMsg.rate = 1.0;
         speechMsg.pitch = 1.0;
@@ -2245,8 +2253,8 @@ function setupPhoneCallOverlay() {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    overlay.classList.remove('open');
-    showToast('📞 Call ended.');
+    closeSheet(overlay);
+    showToast('Call ended.');
   };
 
   if (declineBtn) declineBtn.addEventListener('click', handleEndCall);
