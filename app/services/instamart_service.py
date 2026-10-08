@@ -2,10 +2,9 @@
 Swiggy Instamart Service.
 Handles business logic and communication with Swiggy Instamart MCP (https://mcp.swiggy.com/im)
 with high-availability fallback to rich curated catalog and interactive local cart.
+Order placement and payment never fall back locally: failures propagate to the caller.
 """
 
-import time
-import secrets
 from typing import Optional, Dict, Any, List
 from app.core.logging import logger
 from app.mcp.instamart_client import instamart_mcp_client
@@ -1257,42 +1256,38 @@ class InstamartService:
 
         target_address_id = request.address_id or cart.selected_address_id or "addr_home_1"
 
-        try:
-            tool_args: Dict[str, Any] = {
-                "addressId": target_address_id,
-                "paymentMethod": request.payment_method,
-            }
-            if request.intent_app:
-                tool_args["intentApp"] = request.intent_app
-            elif request.payment_method == "UPI" and request.generate_upi_qr:
-                tool_args["generateUPIQR"] = True
+        tool_args: Dict[str, Any] = {
+            "addressId": target_address_id,
+            "paymentMethod": request.payment_method,
+        }
+        if request.intent_app:
+            tool_args["intentApp"] = request.intent_app
+        elif request.payment_method == "UPI" and request.generate_upi_qr:
+            tool_args["generateUPIQR"] = True
 
-            logger.info(f"Executing Instamart checkout addressId='{target_address_id}' method='{request.payment_method}'")
-            res = await self.client.call_tool("checkout", tool_args, user_id=user_id)
+        logger.info(f"Executing Instamart checkout addressId='{target_address_id}' method='{request.payment_method}'")
+        # MCPAuthenticationError / MCPConnectionError deliberately propagate: an order or payment is never fabricated locally.
+        res = await self.client.call_tool("checkout", tool_args, user_id=user_id)
 
-            if res.get("isError"):
-                structured_err = res.get("structuredContent", {}).get("error", {})
-                err_msg = structured_err.get("message") or "Instamart checkout failed"
-                err_lower = err_msg.lower()
-                if any(term in err_lower for term in ("address", "not found", "serviceable", "not available")):
-                    raise AddressNotServiceableError(f"Delivery address not serviceable: {err_msg}")
-                raise MCPToolError(err_msg)
+        if res.get("isError"):
+            structured_err = res.get("structuredContent", {}).get("error", {})
+            err_msg = structured_err.get("message") or "Instamart checkout failed"
+            err_lower = err_msg.lower()
+            if any(term in err_lower for term in ("address", "not found", "serviceable", "not available")):
+                raise AddressNotServiceableError(f"Delivery address not serviceable: {err_msg}")
+            raise MCPToolError(err_msg)
 
-            data = res.get("structuredContent", {}).get("data", res.get("structuredContent", {}))
-            order_id = str(data.get("orderId") or f"im_ord_{int(time.time())}")
-            status = data.get("status", "CONFIRMED")
-            paas_id = data.get("paasId") or f"paas_{secrets.token_hex(4)}"
-            tx_id = data.get("transactionId") or f"tx_{secrets.token_hex(4)}"
-            intent_url = data.get("upiIntentUrl")
-            qr_data = intent_url or f"upi://pay?pa=swiggyinstamart@axb&pn=SwiggyInstamart&am={total_val}&cu=INR"
-
-        except (MCPAuthenticationError, MCPConnectionError) as e:
-            logger.info(f"Instamart checkout operating in local interactive mode ({e})")
-            order_id = f"im_ord_{int(time.time())}_{secrets.token_hex(2)}"
-            status = "CONFIRMED"
-            paas_id = f"paas_{secrets.token_hex(4)}"
-            tx_id = f"tx_{secrets.token_hex(4)}"
-            qr_data = f"upi://pay?pa=swiggyinstamart@axb&pn=SwiggyInstamart&am={total_val}&cu=INR"
+        data = res.get("structuredContent", {}).get("data", res.get("structuredContent", {}))
+        order_id = str(data.get("orderId") or "")
+        if not order_id:
+            raise MCPToolError(
+                "Instamart checkout response did not include an order id, so the order state is unknown. "
+                "Check your Swiggy orders before retrying."
+            )
+        status = str(data.get("status") or "PENDING_PAYMENT")
+        paas_id = data.get("paasId")
+        tx_id = data.get("transactionId")
+        qr_data = data.get("upiIntentUrl")
 
         # Clear cart on successful checkout
         await self.clear_cart(user_id=user_id)
@@ -1329,7 +1324,7 @@ class InstamartService:
             transaction_id=tx_id,
             upi_intent_url=None,
             upi_qr_data=qr_data,
-            is_qr_flow=True,
+            is_qr_flow=bool(qr_data),
             polling_interval_ms=3000,
             max_time_to_poll_ms=180000,
             payment_method=request.payment_method,
