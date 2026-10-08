@@ -1799,76 +1799,70 @@ function renderCartDrawerItems() {
 }
 
 // --- PAYMENT & QR MODAL ---
+// Amount text without the currency symbol; empty when the backend sent no figure.
+function cleanAmountText(amount) {
+  return amount === null || amount === undefined ? '' : String(amount).replace(/₹/g, '').trim();
+}
+
+// Rally amount: small currency symbol followed by the figure, empty when unknown.
+function setAmountText(el, amount) {
+  if (!el) return;
+  const clean = cleanAmountText(amount);
+  el.innerHTML = clean ? `<span class="r-amount__sym">₹</span>${escapeHtml(clean)}` : '';
+}
+
+// Payment links and QR data come only from the order the backend returned; never built locally.
+function getUpiUrl() {
+  const order = state.activeOrder;
+  return (order && (order.upi_intent_url || order.upi_qr_data)) || '';
+}
+
+// Navigation sink guard for backend-supplied links.
+function isLaunchableUrl(url) {
+  return typeof url === 'string' && !/^\s*(javascript|data|vbscript):/i.test(url);
+}
+
 function setupModals() {
-  // Address modal handlers
+  // Address sheet
   const addrModal = document.getElementById('address-modal');
   const headerLoc = document.getElementById('header-location');
   if (headerLoc && addrModal) {
     headerLoc.addEventListener('click', () => {
       renderAddressModalList();
-      addrModal.classList.add('open');
+      openSheet(addrModal, headerLoc);
     });
   }
   const btnCloseAddr = document.getElementById('btn-close-address');
   if (btnCloseAddr && addrModal) {
-    btnCloseAddr.addEventListener('click', () => {
-      addrModal.classList.remove('open');
-    });
+    btnCloseAddr.addEventListener('click', () => closeSheet(addrModal));
   }
 
-  // Addons modal handlers
+  // Add-ons sheet
   const addonsModal = document.getElementById('addons-modal');
-  document.getElementById('btn-close-addons').addEventListener('click', () => {
-    addonsModal.classList.remove('open');
-  });
+  document.getElementById('btn-close-addons').addEventListener('click', () => closeSheet(addonsModal));
   addonsModal.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
     cb.addEventListener('change', updateAddonTotal);
   });
   document.getElementById('addon-total-btn').addEventListener('click', () => {
     if (state.selectedDishForAddons) {
       addDishToCart(state.selectedDishForAddons.id, 1);
-      addonsModal.classList.remove('open');
+      closeSheet(addonsModal);
     }
   });
 
-  // Payment modal handlers
+  // Payment sheet
   const payModal = document.getElementById('payment-modal');
-  document.getElementById('btn-close-payment').addEventListener('click', () => {
-    payModal.classList.remove('open');
-  });
+  document.getElementById('btn-close-payment').addEventListener('click', () => closeSheet(payModal));
 
-  // Payment method selection
-  document.querySelectorAll('input[name="pay-method"]').forEach((radio) => {
-    radio.addEventListener('change', (e) => {
-      const qrSection = document.getElementById('qr-section');
-      if (e.target.value === 'UPI') {
-        qrSection.style.display = 'block';
-      } else {
-        qrSection.style.display = 'none';
-      }
-    });
-  });
-
-  // Setup Direct UPI Apps Buttons
-  const getUpiUrl = () => {
-    if (state.activeOrder && (state.activeOrder.upi_intent_url || state.activeOrder.upi_qr_data)) {
-      return state.activeOrder.upi_intent_url || state.activeOrder.upi_qr_data;
-    }
-    const rawAmt = state.activeCartType === 'instamart'
-      ? (state.instamartCart ? state.instamartCart.total_amount : '58')
-      : (state.cart && state.cart.pricing ? state.cart.pricing.to_pay : 422);
-    const cleanAmt = String(rawAmt).replace(/₹/g, '').trim();
-    const vpa = '9390787901@upi';
-    const pn = state.activeCartType === 'instamart' ? 'SwiggyInstamart' : 'MeghanaFoods';
-    return `upi://pay?pa=${vpa}&pn=${pn}&am=${cleanAmt}&cu=INR`;
-  };
-
+  // Direct UPI app buttons open the backend-provided payment link
   const launchUpiApp = (appName) => {
     const upiUrl = getUpiUrl();
-    showToast(`📲 Opening ${appName}... Scan the QR code or tap 'I Have Paid' after transfer.`);
-    try {
-      window.location.href = upiUrl;
-    } catch (e) {}
+    if (!upiUrl || !isLaunchableUrl(upiUrl)) {
+      showToast('No UPI link came back for this order. Scan the QR code instead.', { error: true });
+      return;
+    }
+    showToast(`Opening ${appName}. Come back and tap "I have paid" after the transfer.`);
+    window.location.href = upiUrl;
   };
 
   document.getElementById('btn-pay-gpay')?.addEventListener('click', () => launchUpiApp('Google Pay'));
@@ -1878,12 +1872,14 @@ function setupModals() {
 
   // Copy UPI ID button
   document.getElementById('btn-copy-upi')?.addEventListener('click', () => {
-    const vpaText = document.getElementById('upi-vpa-text')?.textContent || '9390787901@upi';
-    navigator.clipboard.writeText(vpaText).then(() => {
-      showToast(`📋 Copied UPI ID: ${vpaText}`);
-    }).catch(() => {
-      showToast(`📋 UPI ID: ${vpaText}`);
-    });
+    const vpaText = document.getElementById('upi-vpa-text')?.textContent || '';
+    if (!vpaText) return;
+    const copied = navigator.clipboard
+      ? navigator.clipboard.writeText(vpaText)
+      : Promise.reject(new Error('Clipboard unavailable'));
+    copied
+      .then(() => showToast(`Copied UPI ID: ${vpaText}`))
+      .catch(() => showToast(`UPI ID: ${vpaText}`));
   });
 
   // Confirm Final Checkout
@@ -1894,30 +1890,58 @@ function displayPaymentQR(order) {
   const modal = document.getElementById('payment-modal');
   if (!modal) return;
 
-  const orderId = order.order_id || '250370098196883';
-  const rawAmount = order.total_amount || (state.cart && state.cart.pricing ? state.cart.pricing.to_pay : 422);
-  const cleanAmount = String(rawAmount).replace(/₹/g, '').trim();
+  document.getElementById('pay-order-id').textContent = order.order_id ? `#${order.order_id}` : '';
 
-  document.getElementById('pay-order-id').textContent = `#${orderId}`;
-  // Ensure single rupee symbol (fixes double rupee ₹₹)
-  document.getElementById('pay-modal-amount').textContent = `₹${cleanAmount}`;
+  // The order's own total, else the backend total of the cart being paid
+  const cartTotal = state.activeCartType === 'instamart'
+    ? (state.instamartCart ? state.instamartCart.total_amount : null)
+    : (state.cart && state.cart.pricing ? state.cart.pricing.to_pay : null);
+  const amount = cleanAmountText(order.total_amount ?? cartTotal);
+  setAmountText(document.getElementById('pay-modal-amount'), amount);
+  setButtonAmount(document.getElementById('btn-final-pay'), amount ? `₹${amount}` : '');
 
+  // QR, UPI ID and app links are shown only when the backend returned payment data
+  const qrData = order.upi_qr_data || order.upi_intent_url || '';
+  const qrSection = document.getElementById('qr-section');
   const qrImg = document.getElementById('swiggy-qr-img');
-  // Use verified UPI format so bank apps never show "merchant experiencing issue"
-  const vpa = '9390787901@upi';
-  const pn = state.activeCartType === 'instamart' ? 'SwiggyInstamart' : 'MeghanaFoods';
-  const qrData = order.upi_qr_data || order.upi_intent_url || `upi://pay?pa=${vpa}&pn=${pn}&am=${cleanAmount}&cu=INR&tn=${orderId}`;
-  qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
-
-  // Parse VPA if present in intent
-  const paMatch = qrData.match(/pa=([^&]+)/);
-  const displayVpa = paMatch ? decodeURIComponent(paMatch[1]) : vpa;
-  if (document.getElementById('upi-vpa-text')) {
-    document.getElementById('upi-vpa-text').textContent = displayVpa;
+  const vpaEl = document.getElementById('upi-vpa-text');
+  const trust = modal.querySelector('.r-pay__trust');
+  if (trust) {
+    trust.dataset.defaultText = trust.dataset.defaultText || trust.textContent;
+    trust.textContent = qrData
+      ? trust.dataset.defaultText
+      : 'Swiggy did not return UPI payment details for this order. Finish payment in the Swiggy app, then tap the button below.';
   }
 
-  modal.classList.add('open');
-  showToast('📲 Swiggy UPI QR Code generated! Please scan or tap an app.');
+  let vpa = '';
+  const paMatch = qrData.match(/[?&]pa=([^&]+)/);
+  if (paMatch) {
+    try {
+      vpa = decodeURIComponent(paMatch[1]);
+    } catch (e) {
+      vpa = '';
+    }
+  }
+  if (qrSection) qrSection.hidden = !qrData;
+  if (qrImg) {
+    if (qrData) {
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
+    } else {
+      qrImg.removeAttribute('src');
+    }
+  }
+  if (vpaEl) {
+    vpaEl.textContent = vpa;
+    const vpaRow = vpaEl.closest('.r-pay__vpa');
+    if (vpaRow) vpaRow.hidden = !vpa;
+  }
+
+  openSheet(modal);
+  if (qrData) {
+    showToast('UPI QR ready. Scan it or open a UPI app.');
+  } else {
+    showToast('No UPI payment details came back for this order.', { error: true });
+  }
 }
 
 async function openPaymentModal() {
@@ -1932,124 +1956,85 @@ async function openPaymentModal() {
   } else if (state.activeCartType === 'instamart' && imCount === 0 && foodCount > 0) {
     state.activeCartType = 'food';
   }
-
   if (foodCount === 0 && imCount === 0) {
-    showToast('⚠️ Your cart is empty! Please add dishes or groceries first.');
+    showToast('Your cart is empty. Add dishes or groceries first.', { error: true });
     openCartDrawerWithType(state.activeCartType || 'food');
     return;
   }
 
-  if (state.activeCartType === 'instamart') {
-    const toPay = state.instamartCart ? state.instamartCart.total_amount : '₹199';
-    showToast('Connecting to Swiggy Instamart Gateway...');
-    try {
-      const res = await api.checkoutInstamart('UPI', true);
-      if (res.success && res.data) {
-        state.activeOrder = res.data;
-        persistActiveOrder();
-        displayPaymentQR(res.data);
-        return;
-      }
-    } catch (e) {
-      console.error('Instamart checkout error:', e);
+  const isInstamart = state.activeCartType === 'instamart';
+  showToast(isInstamart ? 'Connecting to Swiggy Instamart...' : 'Connecting to Swiggy payments...');
+  try {
+    const res = isInstamart ? await api.checkoutInstamart('UPI', true) : await api.checkout('UPI', true);
+    if (res.success && res.data) {
+      state.activeOrder = res.data;
+      persistActiveOrder();
+      displayPaymentQR(res.data);
+      return;
     }
-    state.activeOrder = { order_id: 'IM' + Date.now().toString().slice(-8), total_amount: toPay, is_active: true };
-    persistActiveOrder();
-    displayPaymentQR(state.activeOrder);
-  } else {
-    const toPay = state.cart && state.cart.pricing ? state.cart.pricing.to_pay : 422;
-    showToast('Connecting to Swiggy Payment Gateway...');
-    try {
-      const res = await api.checkout('UPI', true);
-      if (res.success && res.data) {
-        state.activeOrder = res.data;
-        persistActiveOrder();
-        displayPaymentQR(res.data);
-        return;
-      }
-    } catch (e) {
-      console.error('Food checkout error:', e);
-    }
-    state.activeOrder = { order_id: '250370098196883', total_amount: toPay, is_active: true };
-    persistActiveOrder();
-    displayPaymentQR(state.activeOrder);
+    showToast(apiErrorMessage(res, 'Could not start checkout.'), { error: true });
+  } catch (e) {
+    console.error(`${isInstamart ? 'Instamart' : 'Food'} checkout error:`, e);
+    showToast('Could not reach Swiggy checkout. Try again.', { error: true });
   }
+  // Checkout failed: no order exists, so return to the cart instead of showing a payment sheet
+  openCartDrawerWithType(state.activeCartType);
 }
 
 async function handleFinalCheckout() {
-  const methodInput = document.querySelector('input[name="pay-method"]');
-  const method = (methodInput ? methodInput.value : 'UPI') || 'UPI';
   const modal = document.getElementById('payment-modal');
+  const order = state.activeOrder;
+  if (!order || !order.order_id) {
+    showToast('No order to confirm. Review your cart and try again.', { error: true });
+    return;
+  }
+  const isInstamart = state.activeCartType === 'instamart';
 
-  showToast('Finalizing your order with Swiggy...');
-  let placedOrder = null;
-
-  try {
-    if (state.activeCartType === 'instamart') {
-      if (state.activeOrder && state.activeOrder.order_id) {
-        try {
-          const res = await api.confirmInstamartOrder(state.activeOrder.order_id);
-          if (res && res.success && res.data) {
-            placedOrder = { ...state.activeOrder, order_status: 'Placed', is_active: true };
-          }
-        } catch (e) {
-          console.warn('Instamart confirm notice:', e);
-        }
+  await withBusy(document.getElementById('btn-final-pay'), async () => {
+    showToast('Finalizing your order with Swiggy...');
+    let placedOrder = null;
+    try {
+      const res = isInstamart
+        ? await api.confirmInstamartOrder(order.order_id)
+        : await api.confirmOrder(order.order_id);
+      if (res && res.success && res.data) {
+        placedOrder = isInstamart ? { ...order, order_status: 'Placed', is_active: true } : res.data;
+      } else {
+        showToast(apiErrorMessage(res, 'Swiggy could not confirm this order. Check your payment and try again.'), { error: true });
       }
-      placedOrder = placedOrder || state.activeOrder || {
-        order_id: 'IM' + Date.now().toString().slice(-8),
-        order_status: 'Placed',
-        is_active: true,
-        restaurant_name: 'Swiggy Instamart',
-        ordered_items: (state.instamartCart && state.instamartCart.items && state.instamartCart.items.map((i) => `${i.name} (${i.quantity})`).join(', ')) || 'Instamart Groceries',
-        order_total: state.instamartCart ? state.instamartCart.total_amount : '₹58',
-      };
-      await refreshInstamartCart();
-    } else {
-      if (state.activeOrder && state.activeOrder.order_id) {
-        const res = await api.confirmOrder(state.activeOrder.order_id);
-        if (res && res.success && res.data) {
-          placedOrder = res.data;
-        }
-      }
-      await refreshCart();
+    } catch (e) {
+      console.error('Checkout error:', e);
+      showToast('Could not reach Swiggy to confirm the order. Try again.', { error: true });
     }
-  } catch (e) {
-    console.error('Checkout error:', e);
-  }
+    // Not confirmed: keep the payment sheet open so the user can retry
+    if (!placedOrder) return;
 
-  modal.classList.remove('open');
-  hasTriggered2MinAlert = false;
-  state.activeOrder = placedOrder || state.activeOrder || { order_id: '250370896157626', is_active: true };
-  state.activeOrder.is_active = true;
-  persistActiveOrder();
-  persistCarts();
+    const restaurantName = (state.cart && state.cart.restaurant_name) || (state.activeRestaurant ? state.activeRestaurant.name : 'Meghana Foods');
+    await (isInstamart ? refreshInstamartCart() : refreshCart());
 
-  // Increment order frequency count
-  if (state.activeCartType === 'instamart') {
-    recordCompletedOrder('Swiggy Instamart', true);
-  } else {
-    const rName = (state.cart && state.cart.restaurant_name) || (state.activeRestaurant ? state.activeRestaurant.name : 'Meghana Foods');
-    recordCompletedOrder(rName, false);
-  }
+    closeSheet(modal);
+    hasTriggered2MinAlert = false;
+    state.activeOrder = { ...placedOrder, is_active: true };
+    persistActiveOrder();
+    persistCarts();
 
-  showOrderSuccess(state.activeOrder.order_id);
+    // Increment order frequency count
+    if (isInstamart) {
+      recordCompletedOrder('Swiggy Instamart', true);
+    } else {
+      recordCompletedOrder(restaurantName, false);
+    }
+
+    showOrderSuccess(state.activeOrder.order_id);
+  });
 }
 
 function showOrderSuccess(orderId) {
   playArrivalChime();
-  showToast('🎉 Order Confirmed! Live GPS tracking activated.');
+  showToast('Order confirmed. Live tracking is on.');
 
-  // Switch to tracking tab
-  document.querySelectorAll('.tab-btn').forEach((t) => t.classList.remove('active'));
-  document.querySelectorAll('.tab-pane').forEach((p) => p.classList.remove('active'));
-
-  const trackTab = document.querySelector('[data-target="pane-tracking"]');
-  trackTab.classList.add('active');
-  document.getElementById('pane-tracking').classList.add('active');
-
-  // Trigger dynamic tracking
-  syncTrackingTabState();
+  // Switch to tracking tab (also syncs the live tracking state)
+  switchTabById('pane-tracking');
 }
 
 // --- LEAFLET LIVE GPS MAP CONTROLLER ---
