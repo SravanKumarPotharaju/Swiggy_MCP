@@ -46,8 +46,176 @@ function persistActiveOrder() {
   } catch (e) {}
 }
 
+// --- RALLY UI HELPERS ---
+const SVG_STROKE_ATTRS =
+  'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
+
+// Escape API and user strings before they are interpolated into HTML.
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+  ));
+}
+
+// Icon from the inline sprite in index.html (symbol ids are "i-<name>").
+function iconUse(name, extraClass = '') {
+  return `<svg class="r-icon ${extraClass}" ${SVG_STROKE_ATTRS}><use href="#i-${name}"/></svg>`;
+}
+
+// Icon drawn from raw stroke path data, for glyphs the sprite does not have.
+function iconPath(pathData, extraClass = '') {
+  return `<svg class="r-icon ${extraClass}" ${SVG_STROKE_ATTRS}><path d="${pathData}"/></svg>`;
+}
+
+// Rally busy state (.r-btn.is-busy): label hidden, linear sweep shown. Ignores re-entry.
+// Buttons without a __label/__amount child (bare text) fall back to disabled, since
+// .is-busy only hides element children.
+async function withBusy(btn, action) {
+  if (!btn || btn.disabled || btn.classList.contains('is-busy')) return undefined;
+  const useSweep = btn.querySelector('.r-btn__label, .r-btn__amount') !== null;
+  if (useSweep) {
+    btn.classList.add('is-busy');
+    btn.setAttribute('aria-busy', 'true');
+  } else {
+    btn.disabled = true;
+  }
+  try {
+    return await action();
+  } finally {
+    if (useSweep) {
+      btn.classList.remove('is-busy');
+      btn.removeAttribute('aria-busy');
+    } else {
+      btn.disabled = false;
+    }
+  }
+}
+
+// Writes the amount slot of a CTA button; leaves the label untouched. Empty when unknown.
+function setButtonAmount(btn, amountText) {
+  const slot = btn ? btn.querySelector('.r-btn__amount') : null;
+  if (slot) slot.textContent = amountText || '';
+}
+
+// --- TOAST ---
+const TOAST_DURATION_MS = 2400; // matches --sp-dur-toast
+let toastTimer = null;
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = String(message ?? '');
+  toast.classList.add('is-visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('is-visible'), TOAST_DURATION_MS);
+}
+
+// --- SHEETS (.r-sheet-layer) ---
+const SHEET_DISMISS_DISTANCE_PX = 120;
+const SHEET_DISMISS_VELOCITY_PX_PER_MS = 0.5;
+const sheetOpeners = new WeakMap();
+
+function syncBodyLock() {
+  document.body.classList.toggle('r-lock', document.querySelector('.r-sheet-layer.is-open') !== null);
+}
+
+function resetSheetDrag(sheet) {
+  ['transform', 'transition', 'animation'].forEach((prop) => sheet.style.removeProperty(prop));
+}
+
+function openSheet(layer, opener = document.activeElement) {
+  if (!layer) return;
+  const sheet = layer.querySelector('.r-sheet');
+  if (!layer.classList.contains('is-open')) sheetOpeners.set(layer, opener);
+  if (sheet) resetSheetDrag(sheet);
+  layer.classList.add('is-open');
+  layer.setAttribute('aria-hidden', 'false');
+  syncBodyLock();
+  if (sheet) {
+    sheet.setAttribute('tabindex', '-1');
+    sheet.style.outline = 'none';
+    sheet.focus({ preventScroll: true });
+  }
+}
+
+function closeSheet(layer) {
+  if (!layer) return;
+  const sheet = layer.querySelector('.r-sheet');
+  if (sheet) resetSheetDrag(sheet);
+  layer.classList.remove('is-open');
+  layer.setAttribute('aria-hidden', 'true');
+  syncBodyLock();
+  const opener = sheetOpeners.get(layer);
+  sheetOpeners.delete(layer);
+  if (opener && opener.isConnected && typeof opener.focus === 'function') {
+    opener.focus({ preventScroll: true });
+  }
+}
+
+// Drag the grabber or header down past 120px (or faster than .5px/ms) to dismiss.
+function setupSheetDrag(layer) {
+  const sheet = layer.querySelector('.r-sheet');
+  const closeBtn = layer.querySelector('.r-sheet__close');
+  if (!sheet || !closeBtn) return;
+  const isSideDrawer = () =>
+    sheet.classList.contains('r-sheet--drawer') && window.matchMedia('(min-width: 1024px)').matches;
+  let dragging = false;
+  let startY = 0;
+  let startTime = 0;
+  let offset = 0;
+
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const velocity = offset / Math.max(1, e.timeStamp - startTime);
+    if (e.type !== 'pointercancel' && (offset > SHEET_DISMISS_DISTANCE_PX || velocity > SHEET_DISMISS_VELOCITY_PX_PER_MS)) {
+      closeBtn.click();
+    } else {
+      sheet.style.transition = 'transform 200ms var(--sp-ease-standard)';
+      sheet.style.transform = 'none';
+    }
+  };
+
+  sheet.querySelectorAll('.r-sheet__grabber, .r-sheet__header').forEach((handle) => {
+    handle.style.touchAction = 'none';
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button') || isSideDrawer()) return;
+      dragging = true;
+      startY = e.clientY;
+      startTime = e.timeStamp;
+      offset = 0;
+      handle.setPointerCapture(e.pointerId);
+      sheet.style.animation = 'none';
+      sheet.style.transition = 'none';
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      offset = Math.max(0, e.clientY - startY);
+      sheet.style.transform = `translateY(${offset}px)`;
+    });
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
+  });
+}
+
+// Scrim click and Escape press the topmost sheet's own close button, so each
+// sheet keeps a single close path.
+function setupSheets() {
+  document.querySelectorAll('.r-sheet-layer').forEach(setupSheetDrag);
+  document.addEventListener('click', (e) => {
+    const scrim = e.target.closest?.('.r-scrim');
+    if (scrim) scrim.closest('.r-sheet-layer')?.querySelector('.r-sheet__close')?.click();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const open = document.querySelectorAll('.r-sheet-layer.is-open');
+    open[open.length - 1]?.querySelector('.r-sheet__close')?.click();
+  });
+}
+
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
+  setupSheets();
   setupTabs();
   setupVoice();
   setupChat();
@@ -64,36 +232,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setSwiggyConnectedUI(connected = true) {
   const btn = document.getElementById('btn-swiggy-auth');
   const label = document.getElementById('swiggy-auth-label');
-  const icon = document.getElementById('swiggy-auth-icon');
+  if (btn) btn.classList.toggle('is-connected', connected);
+  if (label) label.textContent = connected ? 'Swiggy connected' : 'Connect Swiggy';
   if (connected) {
-    if (btn) btn.classList.add('authenticated');
-    if (label) label.textContent = 'Swiggy Connected';
-    if (icon) icon.textContent = '🟢';
     localStorage.setItem('swiggy_authenticated', 'true');
   } else {
-    if (btn) btn.classList.remove('authenticated');
-    if (label) label.textContent = 'Connect Swiggy';
-    if (icon) icon.textContent = '🟠';
     localStorage.removeItem('swiggy_authenticated');
   }
 }
 
 async function checkSwiggyAuth() {
   try {
-    // Immediate optimistic local check
+    // Optimistic local hint while the status request is in flight
     if (localStorage.getItem('swiggy_authenticated') === 'true') {
       setSwiggyConnectedUI(true);
     }
     const res = await api.getAuthStatus();
-    if (res && res.success && res.data && res.data.authenticated) {
-      setSwiggyConnectedUI(true);
-    } else if (localStorage.getItem('swiggy_authenticated') === 'true') {
-      // Backend restarted: silently re-sync
-      await api.directConnectSwiggy();
-      setSwiggyConnectedUI(true);
-    } else {
-      setSwiggyConnectedUI(false);
-    }
+    setSwiggyConnectedUI(Boolean(res && res.success && res.data && res.data.authenticated));
   } catch (e) {
     console.error('Error checking Swiggy auth:', e);
   }
@@ -116,58 +271,78 @@ function setupSwiggyAuthButton() {
   const btnQuickConnect = document.getElementById('btn-swiggy-quick-connect');
   const btnDisconnect = document.getElementById('btn-swiggy-disconnect');
   const btnRelogin = document.getElementById('btn-swiggy-relogin');
-  const otpMsg = document.getElementById('swiggy-otp-sent-msg');
+  const otpMsgText = document.querySelector('#swiggy-otp-sent-msg .r-banner__text');
+  const otpBoxes = modal ? modal.querySelectorAll('.r-otp__box') : [];
 
   if (!btn || !modal) return;
 
+  const showStep = (step) => {
+    [stepConnected, stepPhone, stepOtp].forEach((el) => {
+      if (el) el.style.display = el === step ? 'block' : 'none';
+    });
+  };
+
+  // Mirror the real input into the six visual boxes; the next empty box is active while focused.
+  const mirrorOtp = () => {
+    if (!otpInput) return;
+    const digits = otpInput.value;
+    const focused = document.activeElement === otpInput;
+    const activeIndex = Math.min(digits.length, otpBoxes.length - 1);
+    otpBoxes.forEach((box, i) => {
+      box.textContent = digits[i] || '';
+      box.classList.toggle('is-filled', i < digits.length);
+      box.classList.toggle('is-active', focused && i === activeIndex);
+    });
+  };
+
+  const resetOtp = () => {
+    if (!otpInput) return;
+    otpInput.value = '';
+    mirrorOtp();
+  };
+
   const openModal = () => {
-    modal.classList.add('open');
-    modal.classList.add('active');
+    openSheet(modal, btn);
     const isConn = localStorage.getItem('swiggy_authenticated') === 'true';
     if (isConn && stepConnected) {
-      stepConnected.style.display = 'block';
-      if (stepPhone) stepPhone.style.display = 'none';
-      if (stepOtp) stepOtp.style.display = 'none';
+      showStep(stepConnected);
     } else {
-      if (stepConnected) stepConnected.style.display = 'none';
-      if (stepPhone) stepPhone.style.display = 'block';
-      if (stepOtp) stepOtp.style.display = 'none';
-      if (otpInput) otpInput.value = '';
+      showStep(stepPhone);
+      resetOtp();
       if (phoneInput) phoneInput.focus();
     }
   };
 
-  const closeModal = () => {
-    modal.classList.remove('open');
-    modal.classList.remove('active');
-  };
+  const closeModal = () => closeSheet(modal);
 
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    openModal();
-  });
-
+  btn.addEventListener('click', openModal);
   if (btnClose) btnClose.addEventListener('click', closeModal);
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal();
-  });
 
-  // 1-Click Instant Connect
-  if (btnQuickConnect) {
-    btnQuickConnect.addEventListener('click', async () => {
-      btnQuickConnect.disabled = true;
-      btnQuickConnect.innerHTML = '<span>⏳</span> Connecting...';
-      try {
-        await api.directConnectSwiggy();
-      } catch (err) {
-        console.warn('Direct connect note:', err);
-      }
-      setSwiggyConnectedUI(true);
-      closeModal();
-      showToast('🟢 Swiggy Connected! Live cart & menu synchronization active.');
-      btnQuickConnect.disabled = false;
-      btnQuickConnect.innerHTML = '<span>⚡</span> 1-Click Instant Connect';
+  if (otpInput) {
+    otpInput.addEventListener('input', () => {
+      otpInput.value = otpInput.value.replace(/\D/g, '');
+      mirrorOtp();
     });
+    otpInput.addEventListener('focus', mirrorOtp);
+    otpInput.addEventListener('blur', mirrorOtp);
+  }
+
+  // 1-Click Instant Connect: the backend returns the Swiggy authorization URL; only
+  // the authenticated callback may mark the account connected.
+  if (btnQuickConnect) {
+    btnQuickConnect.addEventListener('click', () => withBusy(btnQuickConnect, async () => {
+      try {
+        const res = await api.directConnectSwiggy();
+        if (res?.success && res.data?.authorization_url) {
+          window.location.assign(res.data.authorization_url);
+        } else {
+          showToast(res?.detail || res?.message || 'Could not start Swiggy connect. Try the OTP sign-in.');
+        }
+      } catch (err) {
+        console.warn('Direct connect failed:', err);
+        showToast('Network error while connecting to Swiggy.');
+      }
+    }));
   }
 
   // Disconnect
@@ -175,7 +350,9 @@ function setupSwiggyAuthButton() {
     btnDisconnect.addEventListener('click', async () => {
       try {
         await api.logoutSwiggy();
-      } catch (err) {}
+      } catch (err) {
+        console.warn('Swiggy logout request failed:', err);
+      }
       setSwiggyConnectedUI(false);
       closeModal();
       showToast('Swiggy account disconnected.');
@@ -183,87 +360,56 @@ function setupSwiggyAuthButton() {
   }
 
   // Switch Number
-  if (btnRelogin) {
-    btnRelogin.addEventListener('click', () => {
-      if (stepConnected) stepConnected.style.display = 'none';
-      if (stepPhone) stepPhone.style.display = 'block';
-      if (stepOtp) stepOtp.style.display = 'none';
-    });
-  }
+  if (btnRelogin) btnRelogin.addEventListener('click', () => showStep(stepPhone));
 
-  // Send OTP
-  const handleSendOtp = async () => {
+  // Send OTP (also used by Resend; the busy state sits on whichever button was pressed)
+  const handleSendOtp = (trigger) => withBusy(trigger, async () => {
     const phone = phoneInput ? phoneInput.value.trim() : '';
     if (!phone || phone.length < 10) {
-      showToast('⚠️ Please enter a valid 10-digit mobile number.');
+      showToast('Enter a valid 10-digit mobile number.');
       return;
     }
-    btnSendOtp.disabled = true;
-    btnSendOtp.textContent = 'Sending OTP...';
     try {
       const res = await api.sendSwiggyOtp(phone);
       if (res && res.success) {
-        if (stepPhone) stepPhone.style.display = 'none';
-        if (stepOtp) stepOtp.style.display = 'block';
-        if (otpMsg) otpMsg.textContent = `✓ OTP sent to +91 ${phone} via Swiggy.`;
-        showToast(`📲 OTP sent to +91 ${phone}! Check SMS or enter 123456.`);
-        if (otpInput) {
-          otpInput.value = '';
-          otpInput.focus();
-        }
+        showStep(stepOtp);
+        if (otpMsgText) otpMsgText.textContent = `OTP sent to +91 ${phone} via Swiggy.`;
+        showToast(`OTP sent to +91 ${phone}. Check your SMS.`);
+        resetOtp();
+        if (otpInput) otpInput.focus();
       } else {
-        showToast(`⚠️ ${res.detail || res.message || 'Failed to send OTP.'}`);
+        showToast(res?.detail || res?.message || 'Failed to send OTP.');
       }
     } catch (err) {
-      showToast('⚠️ Network error while sending OTP.');
-    } finally {
-      btnSendOtp.disabled = false;
-      btnSendOtp.textContent = 'Send OTP';
+      showToast('Network error while sending OTP.');
     }
-  };
+  });
 
-  if (btnSendOtp) btnSendOtp.addEventListener('click', handleSendOtp);
-  if (btnResendOtp) btnResendOtp.addEventListener('click', handleSendOtp);
+  if (btnSendOtp) btnSendOtp.addEventListener('click', () => handleSendOtp(btnSendOtp));
+  if (btnResendOtp) btnResendOtp.addEventListener('click', () => handleSendOtp(btnResendOtp));
+  if (btnChangePhone) btnChangePhone.addEventListener('click', () => showStep(stepPhone));
 
-  if (btnChangePhone) {
-    btnChangePhone.addEventListener('click', () => {
-      if (stepOtp) stepOtp.style.display = 'none';
-      if (stepPhone) stepPhone.style.display = 'block';
-    });
-  }
-
-  // Verify OTP
-  const handleVerifyOtp = async () => {
+  // Verify OTP: only a successful backend response connects the account.
+  const handleVerifyOtp = () => withBusy(btnVerifyOtp, async () => {
     const phone = phoneInput ? phoneInput.value.trim() : '';
     const otp = otpInput ? otpInput.value.trim() : '';
     if (!otp || otp.length !== 6) {
-      showToast('⚠️ Please enter the full 6-digit OTP.');
+      showToast('Enter the full 6-digit OTP.');
       return;
     }
-    btnVerifyOtp.disabled = true;
-    btnVerifyOtp.textContent = 'Verifying...';
     try {
       const res = await api.verifySwiggyOtp(phone, otp);
-      if ((res && res.success) || otp === '123456' || otp === '000000') {
+      if (res && res.success) {
         setSwiggyConnectedUI(true);
         closeModal();
-        showToast('🟢 Swiggy connected successfully! Cart & live orders synced.');
+        showToast('Swiggy connected. Cart and live orders synced.');
       } else {
-        showToast(`⚠️ ${res.detail || res.message || 'Invalid OTP. Please try again.'}`);
+        showToast(res?.detail || res?.message || 'Invalid OTP. Try again.');
       }
     } catch (err) {
-      if (otp === '123456' || otp === '000000') {
-        setSwiggyConnectedUI(true);
-        closeModal();
-        showToast('🟢 Swiggy connected successfully!');
-      } else {
-        showToast('⚠️ Verification error. Enter 123456 for instant demo access.');
-      }
-    } finally {
-      btnVerifyOtp.disabled = false;
-      btnVerifyOtp.textContent = 'Verify OTP & Connect';
+      showToast('Verification failed. Check your connection and try again.');
     }
-  };
+  });
 
   if (btnVerifyOtp) btnVerifyOtp.addEventListener('click', handleVerifyOtp);
   if (otpInput) {
@@ -274,27 +420,29 @@ function setupSwiggyAuthButton() {
 
   // Browser redirect fallback
   if (btnBrowserFlow) {
-    btnBrowserFlow.addEventListener('click', async () => {
+    btnBrowserFlow.addEventListener('click', () => withBusy(btnBrowserFlow, async () => {
       try {
-        showToast('Generating fresh Swiggy session...');
         const res = await api.loginSwiggy();
         if (res && res.success && res.data && res.data.authorization_url) {
           closeModal();
           window.open(res.data.authorization_url, '_blank');
-          showToast('🔗 Swiggy login opened in new tab. Enter OTP & allow access!');
+          showToast('Swiggy login opened in a new tab. Enter the OTP and allow access.');
+        } else {
+          showToast(res?.detail || res?.message || 'Could not start the Swiggy browser login.');
         }
       } catch (err) {
-        showToast('⚠️ Could not initiate Swiggy browser session.');
+        showToast('Could not initiate Swiggy browser session.');
       }
-    });
+    }));
   }
 
-  // Listen for popup callback message
+  // Listen for popup callback message (same-origin only)
   window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin) return;
     if (event.data && event.data.type === 'SWIGGY_AUTH_SUCCESS') {
       setSwiggyConnectedUI(true);
       closeModal();
-      showToast('🟢 Swiggy connected successfully! Carts & addresses synced.');
+      showToast('Swiggy connected. Carts and addresses synced.');
     }
   });
 }
@@ -344,7 +492,7 @@ async function loadInitialState() {
     }
   } catch (e) {
     console.error('Error loading initial state:', e);
-    showToast('⚠️ Could not connect to backend server.');
+    showToast('Could not connect to the backend server.');
   }
 }
 
@@ -2373,13 +2521,7 @@ function trackSpecificOrder(orderId) {
   syncTrackingTabState();
 }
 
-// --- TOAST & SOUND UTILITIES ---
-function showToast(message) {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 3500);
-}
+// --- SOUND UTILITIES ---
 
 function playArrivalChime() {
   try {
