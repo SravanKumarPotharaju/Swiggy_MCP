@@ -44,5 +44,3 @@ wheels/
 # out-of-band with `hmd invite`.
 .heimdall/team.json
 
-# Rally fonts — UberMove is proprietary (internal use only); kept local until licensing is confirmed
-static/fonts/
