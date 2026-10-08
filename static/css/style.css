@@ -1007,7 +1007,8 @@ h1, h2, h3, h4, .font-heading {
   transition: opacity 0.3s ease;
 }
 
-.modal-overlay.open {
+.modal-overlay.open,
+.modal-overlay.active {
   opacity: 1;
   pointer-events: auto;
 }

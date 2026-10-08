@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     SWIGGY_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/callback"
     SWIGGY_CLIENT_ID: Optional[str] = "swiggy-mcp"
     SWIGGY_CLIENT_SECRET: Optional[str] = None
+    RENDER_EXTERNAL_URL: Optional[str] = None
+
+    def model_post_init(self, __context):
+        if self.RENDER_EXTERNAL_URL and ("localhost" in self.SWIGGY_REDIRECT_URI or not self.SWIGGY_REDIRECT_URI):
+            self.SWIGGY_REDIRECT_URI = f"{self.RENDER_EXTERNAL_URL.rstrip('/')}/api/v1/auth/callback"
 
     # Delivery & Arrival Defaults
     ARRIVAL_ALERT_THRESHOLD_MINUTES: int = 2

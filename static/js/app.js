@@ -99,6 +99,7 @@ function setupSwiggyAuthButton() {
   if (!btn || !modal) return;
 
   const openModal = () => {
+    modal.classList.add('open');
     modal.classList.add('active');
     stepPhone.style.display = 'block';
     stepOtp.style.display = 'none';
@@ -107,15 +108,13 @@ function setupSwiggyAuthButton() {
   };
 
   const closeModal = () => {
+    modal.classList.remove('open');
     modal.classList.remove('active');
   };
 
-  btn.addEventListener('click', async () => {
-    // If already authenticated, check or inform user
-    const res = await api.getAuthStatus();
-    if (res && res.success && res.data && res.data.authenticated) {
-      showToast('🟢 Swiggy is currently connected to SmartFlow!');
-      return;
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('authenticated')) {
+      showToast('🟢 Swiggy is connected! Tap again if you wish to re-authenticate or switch accounts.');
     }
     openModal();
   });
