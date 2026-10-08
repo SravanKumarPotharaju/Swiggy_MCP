@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import qrcode
 from typing import Optional, Dict, Any
 from twilio.rest import Client
@@ -6,10 +7,13 @@ from twilio.twiml.messaging_response import MessagingResponse
 from app.core.config import settings
 from app.core.logging import logger
 
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+STATIC_QR_DIR = BASE_DIR / "static" / "qr"
+
 
 class WhatsAppService:
     def __init__(self):
-        self.qr_dir = "/Users/auto/Desktop/SmartFlow/static/qr"
+        self.qr_dir = str(STATIC_QR_DIR)
         os.makedirs(self.qr_dir, exist_ok=True)
         self.client: Optional[Client] = None
         if settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN:

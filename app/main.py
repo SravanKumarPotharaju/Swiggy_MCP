@@ -94,16 +94,19 @@ app.include_router(whatsapp_router, prefix=settings.API_V1_PREFIX)
 app.include_router(agent_router, prefix=settings.API_V1_PREFIX)
 app.include_router(instamart_router, prefix=settings.API_V1_PREFIX)
 
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BASE_DIR / "static"
+
 # Mount static files for generated QR codes, CSS, JS
-app.mount("/static", StaticFiles(directory="/Users/auto/Desktop/SmartFlow/static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/", tags=["Root"])
 async def root(request: Request):
-    import os
-    index_path = "/Users/auto/Desktop/SmartFlow/static/index.html"
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
     return {
         "success": True,
         "data": {
