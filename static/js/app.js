@@ -1267,6 +1267,42 @@ const IM_CATEGORY_MAP = {
   popular: 'milk bread eggs curd butter',
 };
 
+const ICON_PLUS_PATH = 'M12 5v14M5 12h14';
+const ICON_MINUS_PATH = 'M5 12h14';
+
+// Rally quantity stepper (.r-stepper). dataAttrs is a trusted attribute string added to both buttons.
+function stepperHtml(qty, itemName, dataAttrs = '') {
+  const name = escapeHtml(itemName);
+  return `
+    <div class="r-stepper" role="group" aria-label="Quantity of ${name}">
+      <button type="button" class="r-stepper__btn" data-action="dec" ${dataAttrs} aria-label="Remove one ${name}">${iconPath(ICON_MINUS_PATH)}</button>
+      <span class="r-stepper__qty" aria-live="polite">${escapeHtml(qty)}</span>
+      <button type="button" class="r-stepper__btn" data-action="inc" ${dataAttrs} aria-label="Add one ${name}">${iconPath(ICON_PLUS_PATH)}</button>
+    </div>
+  `;
+}
+
+// Loading placeholders shaped like product tiles, and a full-width block for grid messages.
+function productSkeletonHtml(count = 4) {
+  const tile = '<div class="r-card" aria-hidden="true"><div class="r-skeleton r-skeleton--tile"></div><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div></div>';
+  return tile.repeat(count);
+}
+
+function gridMessageHtml(innerHtml) {
+  return `<div style="grid-column: 1 / -1;">${innerHtml}</div>`;
+}
+
+function setProductGridBusy(busy) {
+  const grid = document.getElementById('im-product-grid');
+  if (!grid) return;
+  if (busy) {
+    grid.innerHTML = productSkeletonHtml();
+    grid.setAttribute('aria-busy', 'true');
+  } else {
+    grid.removeAttribute('aria-busy');
+  }
+}
+
 function setupInstamartTab() {
   const searchInput = document.getElementById('im-search-input');
   const searchBtn = document.getElementById('btn-im-search');
@@ -1276,26 +1312,25 @@ function setupInstamartTab() {
     const doSearch = () => {
       const q = searchInput.value.trim();
       if (!q) return;
-      document.querySelectorAll('.im-cat-pill').forEach((p) => p.classList.remove('active'));
+      if (filterContainer) filterContainer.querySelectorAll('.r-chip').forEach((p) => setChipSelected(p, false));
       const resultsTitle = document.getElementById('im-results-title');
-      if (resultsTitle) resultsTitle.textContent = `🔍 Results for "${q}"`;
+      if (resultsTitle) resultsTitle.textContent = `Results for "${q}"`;
       loadInstamartProducts(q);
     };
 
     searchBtn.addEventListener('click', doSearch);
-    searchInput.addEventListener('keypress', (e) => {
+    searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') doSearch();
     });
   }
 
   if (filterContainer) {
-    filterContainer.querySelectorAll('.im-cat-pill').forEach((pill) => {
+    filterContainer.querySelectorAll('.r-chip').forEach((pill) => {
       pill.addEventListener('click', () => {
-        filterContainer.querySelectorAll('.im-cat-pill').forEach((p) => p.classList.remove('active'));
-        pill.classList.add('active');
+        filterContainer.querySelectorAll('.r-chip').forEach((p) => setChipSelected(p, p === pill));
         const catKey = pill.dataset.cat;
         const resultsTitle = document.getElementById('im-results-title');
-        if (resultsTitle) resultsTitle.textContent = `⚡ ${pill.textContent}`;
+        if (resultsTitle) resultsTitle.textContent = pill.textContent;
 
         if (catKey === 'goto') {
           loadInstamartGoToItems();
@@ -1311,65 +1346,70 @@ function setupInstamartTab() {
 async function loadInstamartProducts(query) {
   const grid = document.getElementById('im-product-grid');
   const countEl = document.getElementById('im-results-count');
-  if (grid) {
-    grid.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 0; color: #94a3b8;">
-        <div style="font-size: 2.2rem; margin-bottom: 0.6rem;">⚡</div>
-        <div>Searching Swiggy Instamart catalog for "${query}"...</div>
-      </div>
-    `;
-  }
+  setProductGridBusy(true);
+  if (countEl) countEl.textContent = 'Searching...';
 
   try {
     const res = await api.searchInstamartProducts(query, null, 12);
-    if (res.success && res.data && res.data.products) {
-      state.instamartProducts = res.data.products;
-      if (countEl) countEl.textContent = `${res.data.products.length} products found`;
+    const products = res.success && res.data ? res.data.products : null;
+    if (Array.isArray(products) && products.length > 0) {
+      state.instamartProducts = products;
+      if (countEl) countEl.textContent = `${products.length} products found`;
       renderInstamartProducts();
     } else {
+      state.instamartProducts = [];
+      if (countEl) countEl.textContent = '0 products found';
       if (grid) {
-        grid.innerHTML = `
-          <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 0; color: #94a3b8;">
-            <div style="font-size: 2.2rem; margin-bottom: 0.6rem;">📦</div>
-            <div>No grocery items found for "${query}". Try searching "milk", "bread", or "chips".</div>
-          </div>
-        `;
+        grid.innerHTML = gridMessageHtml(
+          emptyStateHtml('bag', 'No items found.', `Nothing matched "${query}". Try searching for milk, bread or chips.`)
+        );
       }
     }
   } catch (err) {
     console.error('Error fetching Instamart products:', err);
+    if (countEl) countEl.textContent = '';
     if (grid) {
-      grid.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align: center; padding: 2rem 0; color: #ef4444;">
-          ⚠️ Could not load Instamart products. Please check connection.
-        </div>
-      `;
+      grid.innerHTML = gridMessageHtml(
+        emptyStateHtml('alert', 'Could not load products.', 'Check your connection and try again.')
+      );
     }
+  } finally {
+    setProductGridBusy(false);
   }
 }
 
 async function loadInstamartGoToItems() {
   const grid = document.getElementById('im-product-grid');
   const countEl = document.getElementById('im-results-count');
-  if (grid) {
-    grid.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 0; color: #94a3b8;">
-        <div style="font-size: 2.2rem; margin-bottom: 0.6rem;">⭐</div>
-        <div>Loading your frequent Instamart purchases...</div>
-      </div>
-    `;
-  }
+  setProductGridBusy(true);
+  if (countEl) countEl.textContent = 'Loading your frequent items...';
 
   try {
     const res = await api.getInstamartGoToItems();
-    if (res.success && res.data && res.data.products) {
-      state.instamartProducts = res.data.products;
-      if (countEl) countEl.textContent = `${res.data.products.length} previous items`;
+    const products = res.success && res.data ? res.data.products : null;
+    if (Array.isArray(products) && products.length > 0) {
+      state.instamartProducts = products;
+      if (countEl) countEl.textContent = `${products.length} previous items`;
       renderInstamartProducts();
+    } else {
+      state.instamartProducts = [];
+      if (countEl) countEl.textContent = '0 previous items';
+      if (grid) {
+        grid.innerHTML = gridMessageHtml(
+          emptyStateHtml('bag', 'No go-to items yet.', 'Items you order often on Instamart will show up here.')
+        );
+      }
     }
   } catch (err) {
     console.error('Error fetching Go-To items:', err);
-    loadInstamartProducts('milk');
+    if (countEl) countEl.textContent = '';
+    if (grid) {
+      grid.innerHTML = gridMessageHtml(
+        emptyStateHtml('alert', 'Could not load your go-to items.', 'Check your connection and try again.')
+      );
+    }
+  } finally {
+    setProductGridBusy(false);
   }
 }
 
@@ -1379,6 +1419,11 @@ function renderInstamartProducts() {
 
   const products = state.instamartProducts || [];
   if (products.length === 0) return;
+
+  // Re-rendering replaces the focused control; remember it so keyboard users keep their place
+  const focused = document.activeElement;
+  const focusedCard = focused && grid.contains(focused) ? focused.closest('.r-product') : null;
+  const refocus = focusedCard ? { spin: focusedCard.dataset.spin, action: focused.dataset.action || 'add' } : null;
 
   grid.innerHTML = '';
 
@@ -1393,74 +1438,64 @@ function renderInstamartProducts() {
   products.forEach((p) => {
     const variant = (p.variants && p.variants.length > 0) ? p.variants[0] : null;
     const spinId = variant ? variant.spin_id : p.product_id;
-    const price = (variant && variant.price !== null) ? variant.price : 40;
+    // No price from the API means the tile cannot be bought; never invent one
+    const price = parseFloat(variant ? variant.price : NaN);
+    const hasPrice = Number.isFinite(price);
     const mrp = (variant && variant.mrp) ? variant.mrp : null;
-    const unit = (variant && variant.quantity_description) ? variant.quantity_description : (p.brand || '1 unit');
-    const imgUrl = (variant && variant.raw && variant.raw.imageUrl) || p.image || 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=300&q=80';
+    const unit = (variant && variant.quantity_description) || p.brand || '';
+    const imgUrl = (variant && variant.raw && variant.raw.imageUrl) || p.image || '';
     const currentQty = cartQtyMap[spinId] || 0;
+    const discountPct = hasPrice && mrp && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
+    const name = escapeHtml(p.name);
 
-    const discountPct = mrp && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
+    let action;
+    if (currentQty > 0) {
+      action = stepperHtml(currentQty, p.name);
+    } else if (hasPrice) {
+      action = `<button type="button" class="r-btn r-btn--secondary r-btn--sm r-btn--pill" data-action="add" aria-label="Add ${name}">Add</button>`;
+    } else {
+      action = '<button type="button" class="r-btn r-btn--secondary r-btn--sm r-btn--pill" data-action="add" disabled>Unavailable</button>';
+    }
 
-    const card = document.createElement('div');
-    card.className = 'im-card';
+    const card = document.createElement('article');
+    card.className = 'r-product r-card';
+    card.dataset.spin = spinId;
     card.innerHTML = `
-      <div>
-        <div class="im-card-img-wrap">
-          <span class="im-time-tag">⚡ 10–15m</span>
-          ${discountPct > 0 ? `<span class="im-discount-tag">${discountPct}% OFF</span>` : ''}
-          <img class="im-card-img" src="${imgUrl}" alt="${p.name}" loading="lazy" />
-        </div>
-        <div class="im-card-name" title="${p.name}">${p.name}</div>
-        <div class="im-card-unit">${unit}</div>
+      <div class="r-product__media">
+        ${imgUrl ? `<img class="r-product__img" src="${escapeHtml(imgUrl)}" alt="${name}" loading="lazy" />` : ''}
+        <span class="r-tag r-tag--neutral r-product__time">10 to 15 min</span>
+        ${discountPct > 0 ? `<span class="r-tag r-tag--success r-product__discount">${discountPct}% off</span>` : ''}
       </div>
-      <div class="im-card-bottom">
-        <div class="im-price-wrap">
-          <span class="im-price">₹${price}</span>
-          ${mrp && mrp > price ? `<span class="im-mrp">₹${mrp}</span>` : ''}
+      <h3 class="r-product__name" title="${name}">${name}</h3>
+      ${unit ? `<p class="r-product__unit">${escapeHtml(unit)}</p>` : ''}
+      <div class="r-product__footer">
+        <div class="r-product__price-row">
+          <span class="r-product__price">${hasPrice ? `₹${escapeHtml(price)}` : 'Price unavailable'}</span>
+          ${hasPrice && mrp && mrp > price ? `<span class="r-product__mrp">₹${escapeHtml(mrp)}</span>` : ''}
         </div>
-        <div class="im-action-wrap" data-spin="${spinId}">
-          ${
-            currentQty > 0
-              ? `
-                <div class="im-qty-stepper">
-                  <button class="im-step-dec" data-spin="${spinId}">-</button>
-                  <span>${currentQty}</span>
-                  <button class="im-step-inc" data-spin="${spinId}">+</button>
-                </div>
-              `
-              : `<button class="btn-im-add" data-spin="${spinId}">ADD +</button>`
-          }
-        </div>
+        <div class="r-product__action">${action}</div>
       </div>
     `;
 
     // Handlers
-    const addBtn = card.querySelector('.btn-im-add');
-    if (addBtn) {
-      addBtn.addEventListener('click', async () => {
-        await addInstamartCartItem(spinId, 1, p.name);
+    card.querySelectorAll('.r-product__action [data-action]:not([disabled])').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await addInstamartCartItem(spinId, btn.dataset.action === 'dec' ? -1 : 1, p.name);
       });
-    }
-
-    const decBtn = card.querySelector('.im-step-dec');
-    const incBtn = card.querySelector('.im-step-inc');
-    if (decBtn) {
-      decBtn.addEventListener('click', async () => {
-        await addInstamartCartItem(spinId, -1, p.name);
-      });
-    }
-    if (incBtn) {
-      incBtn.addEventListener('click', async () => {
-        await addInstamartCartItem(spinId, 1, p.name);
-      });
-    }
+    });
 
     grid.appendChild(card);
   });
+
+  if (refocus) {
+    const card = grid.querySelector(`.r-product[data-spin="${CSS.escape(String(refocus.spin))}"]`);
+    const target = card && (card.querySelector(`[data-action="${refocus.action}"]`) || card.querySelector('.r-product__action [data-action]'));
+    if (target) target.focus();
+  }
 }
 
 async function addInstamartCartItem(spinId, delta, itemName = 'Item') {
-  showToast(`Updating Instamart cart...`);
+  showToast('Updating Instamart cart...');
   try {
     const res = await api.addOrUpdateInstamartItem(spinId, delta);
     if (res.success && res.data) {
@@ -1471,13 +1506,13 @@ async function addInstamartCartItem(spinId, delta, itemName = 'Item') {
       if (state.activeCartType === 'instamart') {
         renderCartDrawerItems();
       }
-      showToast(`⚡ Instamart Cart: ${state.instamartCart.total_amount}`);
+      showToast(`Instamart cart: ${state.instamartCart.total_amount}`);
     } else {
-      showToast('⚠️ ' + (res.message || 'Could not update Instamart cart.'));
+      showToast(apiErrorMessage(res, 'Could not update the Instamart cart.'), { error: true });
     }
   } catch (err) {
     console.error('Error updating Instamart item:', err);
-    showToast('⚠️ Error updating item in Instamart cart.');
+    showToast('Error updating item in Instamart cart.', { error: true });
   }
 }
 
