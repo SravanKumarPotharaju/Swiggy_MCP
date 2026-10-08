@@ -2272,22 +2272,32 @@ function setupPhoneCallOverlay() {
 // --- DYNAMIC REAL-TIME TRACKING CONTROLLER ---
 let trackingPollInterval = null;
 let hasTriggered2MinAlert = false;
-let demoStepIndex = 0;
 
-function startLiveTrackingDemo() {
-  demoStepIndex = 0;
-  hasTriggered2MinAlert = false;
-  state.activeOrder = {
-    order_id: 'SWIGGY-DEMO-9481',
-    restaurant_name: 'Meghana Foods',
-    ordered_items: 'Meghana Special Chicken Biryani (1), Extra Gravy (1)',
-    order_status: 'On The Way',
-    is_active: true,
-    is_demo: true,
-  };
-  persistActiveOrder();
-  syncTrackingTabState();
-  showToast('🛵 Live GPS Delivery Tracking demonstration started!');
+const TRACKING_ACTIVE_STATUSES = ['placed', 'confirmed', 'preparing', 'in_transit', 'out_for_delivery', 'picked_up', 'on the way'];
+const PAST_ORDER_LIVE_STATUSES = ['processing', 'picked_up', 'out_for_delivery', 'placed', 'confirmed', 'on the way'];
+
+// Timeline steps before activeIndex are done; allDone marks every step done (delivered).
+function setTimeline(activeIndex, allDone = false) {
+  ['step-1', 'step-2', 'step-3', 'step-4'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isDone = allDone || i < activeIndex;
+    const isActive = !allDone && i === activeIndex;
+    el.className = `r-timeline__step${isDone ? ' is-done' : ''}${isActive ? ' is-active' : ''}`;
+    if (isActive) {
+      el.setAttribute('aria-current', 'step');
+    } else {
+      el.removeAttribute('aria-current');
+    }
+  });
+}
+
+// Status tag next to the ETA: warn while in progress, success once delivered.
+function setTrackingStatus(text, variant = 'warn') {
+  const badgeEl = document.getElementById('tracking-status-badge');
+  if (!badgeEl) return;
+  badgeEl.className = `r-tag r-tag--${variant}`;
+  badgeEl.textContent = text;
 }
 
 async function syncTrackingTabState() {
@@ -2301,7 +2311,7 @@ async function syncTrackingTabState() {
   // Check state.activeOrder
   if (state.activeOrder && state.activeOrder.order_id) {
     const st = (state.activeOrder.order_status || state.activeOrder.status || '').toLowerCase();
-    if (state.activeOrder.is_demo || state.activeOrder.is_active || ['placed', 'confirmed', 'preparing', 'in_transit', 'out_for_delivery', 'picked_up', 'on the way'].includes(st)) {
+    if (state.activeOrder.is_active || TRACKING_ACTIVE_STATUSES.includes(st)) {
       isOrderActive = true;
     }
   }
@@ -2312,7 +2322,7 @@ async function syncTrackingTabState() {
       const ordersRes = await api.getOrders(15);
       if (ordersRes.success && ordersRes.data && ordersRes.data.orders) {
         const activeOrder = ordersRes.data.orders.find((o) =>
-          o.is_active || ['placed', 'confirmed', 'preparing', 'in_transit', 'out_for_delivery', 'picked_up', 'on the way'].includes((o.order_status || '').toLowerCase())
+          o.is_active || TRACKING_ACTIVE_STATUSES.includes((o.order_status || '').toLowerCase())
         );
         if (activeOrder) {
           state.activeOrder = {
@@ -2331,9 +2341,9 @@ async function syncTrackingTabState() {
     }
   }
 
-  // If no active in-transit order, show clean "No Active Order" banner
+  // No active in-transit order: show the empty state
   if (!isOrderActive) {
-    if (noOrderBox) noOrderBox.style.display = 'block';
+    if (noOrderBox) noOrderBox.style.display = '';
     if (activeSection) activeSection.style.display = 'none';
     if (trackingPollInterval) {
       clearInterval(trackingPollInterval);
@@ -2342,9 +2352,9 @@ async function syncTrackingTabState() {
     return;
   }
 
-  // Active or Demo Order is present
+  // Active order is present
   if (noOrderBox) noOrderBox.style.display = 'none';
-  if (activeSection) activeSection.style.display = 'block';
+  if (activeSection) activeSection.style.display = '';
 
   // Initialize Map
   initLiveMap();
@@ -2353,9 +2363,11 @@ async function syncTrackingTabState() {
   }, 200);
 
   const orderId = state.activeOrder.order_id;
-  const itemsText = state.activeOrder.ordered_items || state.activeOrder.items_summary || 'Food order';
   const itemsSummaryEl = document.getElementById('tracking-items-summary');
-  if (itemsSummaryEl) itemsSummaryEl.textContent = `${state.activeOrder.restaurant_name || 'Meghana Foods'} • ${itemsText}`;
+  if (itemsSummaryEl) {
+    const itemsText = state.activeOrder.ordered_items || state.activeOrder.items_summary || '';
+    itemsSummaryEl.textContent = [state.activeOrder.restaurant_name, itemsText].filter(Boolean).join(' · ');
+  }
 
   // Poll immediately and start interval
   pollLiveTracking(orderId);
@@ -2368,115 +2380,39 @@ async function syncTrackingTabState() {
 async function pollLiveTracking(orderId) {
   if (!orderId) return;
 
-  // Handle Demo mode simulation
-  if (state.activeOrder && state.activeOrder.is_demo) {
-    demoStepIndex = (demoStepIndex + 1) % 4;
-    const orderIdEl = document.getElementById('tracking-order-id');
-    if (orderIdEl) orderIdEl.textContent = `Order #${state.activeOrder.order_id}`;
-    const etaEl = document.getElementById('tracking-eta');
-    const badgeEl = document.getElementById('tracking-status-badge');
-    const progressBar = document.getElementById('timeline-progress');
-    const steps = [
-      document.getElementById('step-1'),
-      document.getElementById('step-2'),
-      document.getElementById('step-3'),
-      document.getElementById('step-4'),
-    ];
-    steps.forEach((s) => { if (s) s.className = 'step'; });
-
-    if (demoStepIndex === 0) {
-      if (etaEl) etaEl.textContent = 'ETA: ~18 mins';
-      if (badgeEl) badgeEl.textContent = 'Swiggy: Order Confirmed';
-      if (steps[0]) steps[0].className = 'step active';
-      if (progressBar) progressBar.style.width = '20%';
-      moveRiderTo(RESTAURANT_COORDS, 'Meghana Foods • Order Confirmed');
-    } else if (demoStepIndex === 1) {
-      if (etaEl) etaEl.textContent = 'ETA: ~12 mins';
-      if (badgeEl) badgeEl.textContent = 'Swiggy: Food Preparing in Kitchen';
-      if (steps[0]) steps[0].className = 'step done';
-      if (steps[1]) steps[1].className = 'step active';
-      if (progressBar) progressBar.style.width = '45%';
-      moveRiderTo(RESTAURANT_COORDS, 'Meghana Foods • Chef packing biryani');
-    } else if (demoStepIndex === 2) {
-      if (etaEl) etaEl.textContent = 'ETA: ~6 mins';
-      if (badgeEl) badgeEl.textContent = 'Swiggy: On The Way (Ravi Kumar)';
-      if (steps[0]) steps[0].className = 'step done';
-      if (steps[1]) steps[1].className = 'step done';
-      if (steps[2]) steps[2].className = 'step active';
-      if (progressBar) progressBar.style.width = '75%';
-      moveRiderTo(DELIVERY_ROUTE[3], 'On the way • Speed: 34 km/h');
-      if (liveMap) liveMap.panTo(DELIVERY_ROUTE[3]);
-    } else {
-      if (etaEl) etaEl.textContent = 'ETA: ~2 mins (Gate Arrival)';
-      if (badgeEl) badgeEl.textContent = 'Swiggy: Arriving at Gate';
-      if (steps[0]) steps[0].className = 'step done';
-      if (steps[1]) steps[1].className = 'step done';
-      if (steps[2]) steps[2].className = 'step done';
-      if (steps[3]) steps[3].className = 'step active';
-      if (progressBar) progressBar.style.width = '100%';
-      moveRiderTo(DELIVERY_ROUTE[5], '🚨 Arriving at Gate in 2 mins!');
-      if (riderMarker) riderMarker.openPopup();
-      if (liveMap) liveMap.setView(DELIVERY_ROUTE[5], 16);
-      if (!hasTriggered2MinAlert) {
-        hasTriggered2MinAlert = true;
-        triggerGateArrivalAlert(state.activeOrder.order_id, '2 minutes');
-      }
-    }
-    return;
-  }
-
   try {
     const res = await api.trackOrder(orderId);
     if (!res.success || !res.data) return;
 
     const data = res.data;
-    const etaText = data.eta_text || (data.estimated_arrival_minutes ? `${data.estimated_arrival_minutes} mins` : '15 mins');
+    // No ETA or progress from the backend means unknown, not a guess
+    const etaText = data.eta_text || (data.estimated_arrival_minutes ? `${data.estimated_arrival_minutes} mins` : '');
     const status = (data.status || '').toLowerCase();
-    const fallbackStatus = (state.activeOrder && state.activeOrder.order_status) ? state.activeOrder.order_status : 'In Transit';
+    const fallbackStatus = (state.activeOrder && state.activeOrder.order_status) ? state.activeOrder.order_status : 'In transit';
     const title = (data.status === 'NOT_FOUND' || (data.status_message && data.status_message.includes('No tracking')))
       ? fallbackStatus
       : (data.title || data.status_message || fallbackStatus);
-    const progressPct = data.progress_percentage !== null && data.progress_percentage !== undefined ? data.progress_percentage : 75;
+    const progressPct = typeof data.progress_percentage === 'number' ? data.progress_percentage : null;
 
     // Update Header
     const orderIdEl = document.getElementById('tracking-order-id');
     if (orderIdEl) orderIdEl.textContent = `Order #${orderId}`;
 
     const etaEl = document.getElementById('tracking-eta');
-    if (etaEl) etaEl.textContent = `ETA: ~${etaText}`;
+    if (etaEl) etaEl.textContent = etaText ? `ETA: ~${etaText}` : 'ETA unavailable';
 
-    const badgeEl = document.getElementById('tracking-status-badge');
-    if (badgeEl) badgeEl.textContent = `Swiggy: ${title}`;
-
-    // Stepper updates
-    const progressBar = document.getElementById('timeline-progress');
-    const steps = [
-      document.getElementById('step-1'),
-      document.getElementById('step-2'),
-      document.getElementById('step-3'),
-      document.getElementById('step-4'),
-    ];
-
-    steps.forEach((s) => {
-      if (s) s.className = 'step';
-    });
+    const delivered = status === 'delivered' || (progressPct !== null && progressPct >= 100);
+    setTrackingStatus(`Swiggy: ${title}`, delivered ? 'success' : 'warn');
 
     // Dynamic step calculation based on real Swiggy progress
-    if (status === 'delivered' || progressPct >= 100) {
-      steps.forEach((s) => {
-        if (s) s.className = 'step done';
-      });
-      if (progressBar) progressBar.style.width = '100%';
-      moveRiderTo(HOME_COORDS, 'Delivered at Gate');
-    } else if (progressPct >= 85 || (etaText && etaText.includes('2 min')) || status === 'arriving') {
-      if (steps[0]) steps[0].className = 'step done';
-      if (steps[1]) steps[1].className = 'step done';
-      if (steps[2]) steps[2].className = 'step done';
-      if (steps[3]) steps[3].className = 'step active';
-      if (progressBar) progressBar.style.width = '100%';
+    if (delivered) {
+      setTimeline(-1, true);
+      moveRiderTo(HOME_COORDS, 'Delivered at the gate');
+    } else if ((progressPct !== null && progressPct >= 85) || etaText.includes('2 min') || status === 'arriving') {
+      setTimeline(3);
 
       // Move rider marker to 2-min gate waypoint
-      moveRiderTo(DELIVERY_ROUTE[5], '🚨 Arriving at Gate in 2 mins!');
+      moveRiderTo(DELIVERY_ROUTE[5], 'Arriving at the gate in 2 mins');
       if (riderMarker) riderMarker.openPopup();
       if (liveMap) liveMap.setView(DELIVERY_ROUTE[5], 16);
 
@@ -2485,20 +2421,14 @@ async function pollLiveTracking(orderId) {
         hasTriggered2MinAlert = true;
         triggerGateArrivalAlert(orderId, etaText);
       }
-    } else if (status === 'picked_up' || status === 'out_for_delivery' || progressPct >= 50) {
-      if (steps[0]) steps[0].className = 'step done';
-      if (steps[1]) steps[1].className = 'step done';
-      if (steps[2]) steps[2].className = 'step active';
-      if (progressBar) progressBar.style.width = `${Math.max(50, progressPct)}%`;
-
-      moveRiderTo(DELIVERY_ROUTE[3], `On the way • Speed: 32 km/h (${etaText})`);
+    } else if (status === 'picked_up' || status === 'out_for_delivery' || (progressPct !== null && progressPct >= 50)) {
+      setTimeline(2);
+      moveRiderTo(DELIVERY_ROUTE[3], etaText ? `On the way (${etaText})` : 'On the way');
       if (liveMap) liveMap.panTo(DELIVERY_ROUTE[3]);
     } else {
       // Preparing
-      if (steps[0]) steps[0].className = 'step done';
-      if (steps[1]) steps[1].className = 'step active';
-      if (progressBar) progressBar.style.width = '25%';
-      moveRiderTo(RESTAURANT_COORDS, 'At Meghana Foods • Kitchen preparing food');
+      setTimeline(1);
+      moveRiderTo(RESTAURANT_COORDS, 'At the restaurant, kitchen preparing food');
     }
   } catch (e) {
     console.warn('Live tracking poll error:', e);
@@ -2508,10 +2438,11 @@ async function pollLiveTracking(orderId) {
 function triggerGateArrivalAlert(orderId, etaText) {
   const alertBox = document.getElementById('gate-arrival-alert');
   if (alertBox) {
-    alertBox.style.display = 'flex';
+    // .r-banner is a flex row: clearing the inline display restores it
+    alertBox.style.display = '';
     const alertMsg = document.getElementById('gate-arrival-alert-msg');
     if (alertMsg) {
-      alertMsg.innerHTML = `Rider <strong>Ravi Kumar</strong> is ${etaText || '2 minutes'} from your building gate in Rajajinagar. Incoming call triggered!`;
+      alertMsg.innerHTML = `Rider <strong>Ravi Kumar</strong> is ${escapeHtml(etaText || '2 minutes')} from your building gate in Rajajinagar. Incoming call triggered.`;
     }
   }
 
@@ -2519,12 +2450,12 @@ function triggerGateArrivalAlert(orderId, etaText) {
   playArrivalChime();
 
   // Toast
-  showToast('🚨 PROACTIVE ALERT: Rider is 2 minutes from your gate in Rajajinagar!');
+  showToast('Rider is 2 minutes from your gate in Rajajinagar.');
 
   // Desktop notification
   if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('SmartFlow: Rider Arriving in 2 Mins!', {
-      body: 'Your Meghana Foods food order is arriving at the building gate. Please be ready!',
+    new Notification('SmartFlow: Rider arriving in 2 mins', {
+      body: 'Your Meghana Foods food order is arriving at the building gate. Please be ready.',
       icon: 'https://media-assets.swiggy.com/swiggy/image/upload/FOOD_CATALOG/IMAGES/CMS/2025/12/29/57bebf52-5a58-42e0-af9d-3d872d52de83_2d89d14b-3568-4be1-946d-1d7b0539edae.jpg',
     });
   }
@@ -2533,55 +2464,85 @@ function triggerGateArrivalAlert(orderId, etaText) {
   showIncomingCallModal('Ravi Kumar (Swiggy Delivery)', '+91 80 6746 6746 (Arrival Alert)');
 
   // Dispatch backend automated cellular call
-  api.triggerAutomatedCall(null, 'Hello Sravan! Your Swiggy delivery rider Ravi is 2 minutes from your gate in Rajajinagar. Please collect your food.').catch((e) => console.warn('Twilio call notice:', e));
+  api.triggerAutomatedCall(null, 'Hello! Your Swiggy delivery rider Ravi is 2 minutes from your gate in Rajajinagar. Please collect your food.').catch((e) => console.warn('Twilio call notice:', e));
 }
 
+// One order-history row (.r-row): details on the left, amount and Track or Reorder on the right.
+function pastOrderRowEl(o) {
+  const status = String(o.order_status || '').toLowerCase();
+  const isLive = Boolean(o.is_active) || PAST_ORDER_LIVE_STATUSES.includes(status);
+  let tag = '';
+  if (isLive) {
+    tag = '<span class="r-tag r-tag--warn">In progress</span>';
+  } else if (status === 'delivered') {
+    tag = '<span class="r-tag r-tag--success">Delivered</span>';
+  } else if (o.order_status) {
+    tag = `<span class="r-tag r-tag--neutral">${escapeHtml(o.order_status)}</span>`;
+  }
+  const restaurant = escapeHtml(o.restaurant_name);
+
+  const row = document.createElement('li');
+  row.className = 'r-row';
+  row.innerHTML = `
+    <div class="r-row__main">
+      <p class="r-row__title">${restaurant}</p>
+      <p class="r-row__sub">${escapeHtml(o.ordered_items)}</p>
+      <p class="r-row__sub">${escapeHtml(o.ordered_time || 'Past order')} ${tag}</p>
+    </div>
+    <div class="r-row__trail">
+      <span class="r-row__amount">${escapeHtml(o.order_total)}</span>
+      <button type="button" class="r-btn r-btn--secondary r-btn--sm r-btn--pill" aria-label="${isLive ? 'Track' : 'Reorder'} ${restaurant} order">${isLive ? 'Track' : 'Reorder'}</button>
+    </div>
+  `;
+  row.querySelector('button').addEventListener('click', () => (isLive ? trackSpecificOrder(o) : reorderPastOrder(o)));
+  return row;
+}
 
 async function loadPastOrders() {
   const container = document.getElementById('past-orders-list');
   if (!container) return;
+  // Only replace the loading skeleton with an error; a failed refresh keeps the list already shown
+  const showLoadError = () => {
+    if (container.querySelector('.r-skeleton')) {
+      container.innerHTML = `<li>${emptyStateHtml('alert', 'Could not load orders.', 'Check your connection and try again.')}</li>`;
+    }
+  };
+
   try {
     const res = await api.getOrders(15);
     if (res.success && res.data && res.data.orders) {
       container.innerHTML = '';
-      res.data.orders.forEach((o) => {
-        const card = document.createElement('div');
-        card.className = 'order-history-card';
-        const isLive = o.is_active || ['processing', 'picked_up', 'out_for_delivery', 'placed', 'confirmed', 'on the way'].includes((o.order_status || '').toLowerCase());
-        const statusColor = isLive ? '#f59e0b' : '#10b981';
-
-        card.innerHTML = `
-          <div>
-            <div style="font-weight: 700; display: flex; align-items: center; gap: 8px;">
-              <span>${o.restaurant_name}</span>
-              ${isLive ? '<span style="font-size: 0.72rem; background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 1px 6px; border-radius: 4px;">ACTIVE IN-FLIGHT</span>' : ''}
-            </div>
-            <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 2px;">${o.ordered_items}</div>
-            <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
-              ${o.ordered_time || 'Past Order'} • <span style="color: ${statusColor}; font-weight: 600;">${o.order_status}</span>
-            </div>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-weight: 800; font-size: 1rem;">${o.order_total}</div>
-            ${isLive 
-              ? `<button class="chip" style="margin-top: 0.4rem; padding: 4px 12px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border-color: rgba(245,158,11,0.4);" onclick="trackSpecificOrder('${o.order_id}')">Track Live 🛵</button>`
-              : `<button class="chip" style="margin-top: 0.4rem; padding: 2px 10px;" onclick="addDishToCart('86416530', 1)">Reorder 🔁</button>`
-            }
-          </div>
-        `;
-        container.appendChild(card);
-      });
+      if (res.data.orders.length === 0) {
+        container.innerHTML = `<li>${emptyStateHtml('bag', 'No orders yet.', 'Your recent orders will show up here.')}</li>`;
+        return;
+      }
+      res.data.orders.forEach((o) => container.appendChild(pastOrderRowEl(o)));
+    } else {
+      showLoadError();
     }
   } catch (e) {
     console.warn('Could not load past orders:', e);
+    showLoadError();
   }
 }
 
-function trackSpecificOrder(orderId) {
-  state.activeOrder = { order_id: orderId, is_active: true };
+function trackSpecificOrder(order) {
+  state.activeOrder = {
+    order_id: order.order_id,
+    restaurant_name: order.restaurant_name,
+    ordered_items: order.ordered_items,
+    order_status: order.order_status,
+    is_active: true,
+  };
   persistActiveOrder();
   hasTriggered2MinAlert = false;
   syncTrackingTabState();
+}
+
+// Reorders through the concierge with the real order details; no item ids are guessed.
+function reorderPastOrder(order) {
+  switchTabById('pane-chat');
+  sendAgentMessage(`Reorder ${order.ordered_items} from ${order.restaurant_name}`);
 }
 
 // --- SOUND UTILITIES ---
