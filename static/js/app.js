@@ -149,6 +149,7 @@ function showToast(message, { error = false } = {}) {
 // --- SHEETS (.r-sheet-layer) ---
 const SHEET_DISMISS_DISTANCE_PX = 120;
 const SHEET_DISMISS_VELOCITY_PX_PER_MS = 0.5;
+const SHEET_MIN_FLICK_DISTANCE_PX = 24; // a fast flick must travel this far, so a twitch never dismisses
 const sheetOpeners = new WeakMap();
 
 function syncBodyLock() {
@@ -205,7 +206,8 @@ function setupSheetDrag(layer) {
     if (!dragging) return;
     dragging = false;
     const velocity = offset / Math.max(1, e.timeStamp - startTime);
-    if (e.type !== 'pointercancel' && (offset > SHEET_DISMISS_DISTANCE_PX || velocity > SHEET_DISMISS_VELOCITY_PX_PER_MS)) {
+    const isFlick = offset > SHEET_MIN_FLICK_DISTANCE_PX && velocity > SHEET_DISMISS_VELOCITY_PX_PER_MS;
+    if (e.type !== 'pointercancel' && (offset > SHEET_DISMISS_DISTANCE_PX || isFlick)) {
       closeBtn.click();
     } else {
       sheet.style.transition = 'transform 200ms var(--sp-ease-standard)';
