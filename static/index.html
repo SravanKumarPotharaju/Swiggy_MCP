@@ -2,613 +2,612 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SmartFlow — Your AI Food Delivery Concierge</title>
-  <meta name="description" content="Voice-first Swiggy food ordering concierge with real-time add-ons, human-in-the-loop cart approval, live UPI payment & proactive 2-minute gate arrival alerts." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍛</text></svg>" />
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
-  <!-- Leaflet Map CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#E8E8E8" />
+  <title>SmartFlow - Your AI food delivery concierge</title>
+  <meta name="description" content="Voice-first Swiggy food ordering concierge with real-time add-ons, human-in-the-loop cart approval, live UPI payment and proactive 2-minute gate arrival alerts." />
+  <link rel="preload" href="/static/fonts/UberMove-Regular.ttf" as="font" type="font/ttf" crossorigin />
+  <link rel="preload" href="/static/fonts/UberMove-Medium.ttf" as="font" type="font/ttf" crossorigin />
+  <link rel="preload" href="/static/fonts/UberMove-Bold.ttf" as="font" type="font/ttf" crossorigin />
+  <!-- Leaflet map CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Stylesheet -->
-  <link rel="stylesheet" href="/static/css/style.css?v=5" />
+  <!-- Rally tokens, then primitives, then SmartFlow layout -->
+  <link rel="stylesheet" href="/static/css/rally-tokens.css" />
+  <link rel="stylesheet" href="/static/css/rally-components.css?v=1" />
+  <link rel="stylesheet" href="/static/css/style.css?v=6" />
 </head>
 <body>
 
-  <!-- Top Header Navigation -->
-  <header class="header">
-    <a href="#" class="logo-container">
-      <div class="logo-icon">🍛</div>
-      <div>
-        <div class="logo-text">SmartFlow</div>
-      </div>
-      <span class="logo-badge">AI CONCIERGE</span>
-    </a>
+  <!-- Icon sprite: 24x24, 2px stroke, round caps and joins. Referenced with <use href="#i-name">. -->
+  <svg class="r-visually-hidden" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.2-4.4A8 8 0 1 1 21 12z"/></symbol>
+      <symbol id="i-food" viewBox="0 0 24 24"><path d="M7 3v7M4 3v5a3 3 0 0 0 6 0V3M7 11v10M18 21V3c-2.5 1.5-4 4.5-4 8 0 2 1 3 4 3"/></symbol>
+      <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8zM9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+      <symbol id="i-scooter" viewBox="0 0 24 24"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17h6M18 14l-2-8h-3M6 14l2-5h5"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6 7-11.5a7 7 0 0 0-14 0C5 15 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol>
+      <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.2l2.4 11h10.3L20 7.5H6"/><circle cx="9" cy="19.5" r="1.2"/><circle cx="17" cy="19.5" r="1.2"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4zM12 10v4M12 17.5v.01"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 13.5h6L10 21l8-10.5h-6L13 3z"/></symbol>
+    </defs>
+  </svg>
 
-    <!-- Location Pill -->
-    <div class="header-center" id="header-location" title="Delivery Address">
-      <span>📍</span>
-      <span>Deliver to: <strong>Home</strong> (Rajajinagar, Bengaluru)</span>
-    </div>
+  <div class="r-app">
 
-    <!-- Header Actions -->
-    <div class="header-actions">
-      <button class="btn-swiggy-auth" id="btn-swiggy-auth" title="Connect Swiggy MCP Account">
-        <span id="swiggy-auth-icon">🟠</span>
-        <span id="swiggy-auth-label">Connect Swiggy</span>
+    <!-- Top bar -->
+    <header class="r-topbar">
+      <a href="#" class="r-topbar__brand" aria-label="SmartFlow home">
+        <span class="r-topbar__brand-name">SmartFlow</span>
+        <span class="r-tag r-tag--neutral r-topbar__brand-tag r-hide-mobile">AI concierge</span>
+      </a>
+
+      <button type="button" class="r-topbar__location" id="header-location" title="Delivery address" aria-label="Change delivery address">
+        <svg class="r-icon r-icon--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-pin"/></svg>
+        <span>Deliver to <strong>Home</strong> (Rajajinagar, Bengaluru)</span>
       </button>
 
-      <button class="btn-call" id="btn-call-phone" title="Trigger Automated Call to your phone">
-        <span>📞</span>
-        <span>Call My Phone</span>
-      </button>
+      <div class="r-topbar__actions">
+        <button type="button" class="r-btn r-btn--secondary r-btn--sm r-btn--pill" id="btn-swiggy-auth" title="Connect Swiggy account">
+          <span class="r-btn__dot" id="swiggy-auth-icon"></span>
+          <span class="r-btn__label" id="swiggy-auth-label">Connect Swiggy</span>
+        </button>
 
-      <button class="cart-btn" id="btn-open-cart" title="View Cart">
-        <span>🛒</span>
-        <span>Cart</span>
-        <span class="cart-badge" id="cart-badge">0</span>
-      </button>
-    </div>
-  </header>
+        <button type="button" class="r-btn r-btn--icon" id="btn-call-phone" aria-label="Call my phone" title="Trigger an automated call to your phone">
+          <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-phone"/></svg>
+          <span class="r-btn__label r-hide-mobile">Call me</span>
+        </button>
 
-  <!-- Main Content Layout -->
-  <main class="main-layout">
-
-    <!-- Hero Voice Assistant Card -->
-    <section class="hero-voice">
-      <h1 class="hero-title">Your <span>AI Food Concierge</span></h1>
-      <p class="hero-subtitle">
-        Speak naturally in English or Hindi to discover food, customize add-ons, inspect Swiggy carts, and receive live map tracking with 2-minute gate arrival calls.
-      </p>
-
-      <!-- Interactive Microphone Orb -->
-      <div class="mic-wrapper">
-        <button class="mic-orb" id="mic-btn" aria-label="Tap to speak your food order" title="Click to Speak">
-          🎙️
+        <button type="button" class="r-btn r-btn--icon" id="btn-open-cart" aria-label="Open cart" title="View cart">
+          <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-cart"/></svg>
+          <span class="r-badge" id="cart-badge">0</span>
         </button>
       </div>
+    </header>
 
-      <!-- Animated Voice Wave Bars -->
-      <div class="wave-bars" id="wave-bars" aria-hidden="true">
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
+    <main class="r-app__main">
+
+      <!-- Chat -->
+      <section class="r-screen is-active" id="pane-chat" aria-label="AI concierge chat">
+        <div class="r-chat">
+          <div class="r-chat__welcome">
+            <h1 class="r-chat__welcome-title">Your food concierge</h1>
+            <p class="r-chat__welcome-text">Speak or type to find food, customise add-ons, check your Swiggy cart and track delivery live.</p>
+          </div>
+          <div class="r-chat__thread" id="chat-messages" role="log" aria-live="polite"></div>
+        </div>
+
+        <div class="r-composer">
+          <div class="r-composer__inner">
+            <div class="r-composer__suggestions r-chip-rail r-no-scrollbar" id="quick-action-chips" role="group" aria-label="Suggestions">
+              <!-- Frequent suggestions (rendered only when ordered more than 3 times) -->
+              <span id="frequent-suggestions-container" style="display: contents;"></span>
+              <button type="button" class="r-chip" data-prompt="Open food cart">Food cart</button>
+              <button type="button" class="r-chip" data-prompt="Open instamart cart">Instamart cart</button>
+              <button type="button" class="r-chip" data-prompt="Proceed to checkout and payment">Checkout and pay</button>
+              <button type="button" class="r-chip" data-prompt="Where is my order? Track status">Live tracking</button>
+            </div>
+
+            <p class="r-composer__status" id="mic-status">Tap the mic to speak. Say "exit" to stop.</p>
+
+            <div class="r-composer__row">
+              <div class="r-composer__field">
+                <input type="text" class="r-composer__input" id="chat-input" placeholder="Type or speak your order" autocomplete="off" enterkeyhint="send" aria-label="Message" />
+                <div class="r-composer__wave" id="wave-bars" aria-hidden="true">
+                  <span class="r-composer__wave-bar"></span>
+                  <span class="r-composer__wave-bar"></span>
+                  <span class="r-composer__wave-bar"></span>
+                  <span class="r-composer__wave-bar"></span>
+                  <span class="r-composer__wave-bar"></span>
+                  Listening...
+                </div>
+              </div>
+              <button type="button" class="r-composer__action r-composer__action--mic" id="mic-btn" aria-label="Tap to speak your food order" aria-pressed="false" title="Speak">
+                <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-mic"/></svg>
+              </button>
+              <button type="button" class="r-composer__action r-composer__action--send" id="btn-send" aria-label="Send message" title="Send">
+                <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-send"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Food menu -->
+      <section class="r-screen" id="pane-menu" aria-label="Food menu" hidden>
+        <div class="r-stack">
+          <!-- Frequent restaurants (rendered only when ordered more than 2 times) -->
+          <div class="r-chip-rail r-no-scrollbar" id="restaurant-nav-pills" role="tablist" aria-label="Restaurants"></div>
+
+          <article class="r-restaurant r-restaurant--hero r-card r-card--float">
+            <div class="r-restaurant__body">
+              <h2 class="r-restaurant__name">Meghana Foods</h2>
+              <p class="r-para-md">Andhra, Biryani, North Indian</p>
+              <div class="r-restaurant__meta">
+                <span class="r-tag r-tag--neutral r-restaurant__rating">4.4 &middot; 10K+ ratings</span>
+                <span class="r-tag r-tag--neutral r-restaurant__eta">25 to 30 min</span>
+                <span>Rajajinagar, Bengaluru</span>
+              </div>
+              <div class="r-restaurant__badges">
+                <span class="r-tag r-tag--accent" id="restaurant-frequent-badge" style="display: none;"></span>
+              </div>
+            </div>
+          </article>
+
+          <div class="r-chip-rail r-no-scrollbar" id="category-filters" role="tablist" aria-label="Menu categories"></div>
+
+          <div class="r-grid r-grid--wide" id="menu-grid">
+            <div class="r-card" aria-hidden="true"><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div><div class="r-skeleton r-skeleton--block"></div></div>
+            <div class="r-card" aria-hidden="true"><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div><div class="r-skeleton r-skeleton--block"></div></div>
+            <div class="r-card" aria-hidden="true"><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div><div class="r-skeleton r-skeleton--block"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Instamart -->
+      <section class="r-screen" id="pane-instamart" aria-label="Instamart groceries" hidden>
+        <div class="r-stack">
+          <article class="r-restaurant r-restaurant--store r-card r-card--float">
+            <div class="r-restaurant__body">
+              <span class="r-tag r-tag--neutral r-restaurant__eta" id="im-hero-badge">Instamart, 10 to 15 min</span>
+              <h2 class="r-restaurant__name">Instant groceries and essentials</h2>
+              <p class="r-para-md">Milk, bread, eggs, produce, snacks and daily essentials with superfast delivery.</p>
+
+              <form class="r-search" role="search" onsubmit="return false;">
+                <svg class="r-icon r-search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-search"/></svg>
+                <input type="search" class="r-search__input" id="im-search-input" placeholder="Search groceries" autocomplete="off" enterkeyhint="search" aria-label="Search Instamart" />
+                <button type="button" class="r-search__submit r-btn r-btn--primary r-btn--sm r-btn--pill" id="btn-im-search">Search</button>
+              </form>
+            </div>
+          </article>
+
+          <div class="r-chip-rail r-no-scrollbar" id="im-category-filters" role="tablist" aria-label="Instamart categories">
+            <button type="button" class="r-chip r-chip--selected" data-cat="milk" role="tab" aria-selected="true">Dairy and milk</button>
+            <button type="button" class="r-chip" data-cat="bread" role="tab" aria-selected="false">Bread and bakery</button>
+            <button type="button" class="r-chip" data-cat="eggs" role="tab" aria-selected="false">Eggs and meat</button>
+            <button type="button" class="r-chip" data-cat="snacks" role="tab" aria-selected="false">Snacks and chips</button>
+            <button type="button" class="r-chip" data-cat="drinks" role="tab" aria-selected="false">Drinks and juices</button>
+            <button type="button" class="r-chip" data-cat="fruits" role="tab" aria-selected="false">Fruits and veggies</button>
+            <button type="button" class="r-chip" data-cat="maggi" role="tab" aria-selected="false">Instant noodles</button>
+            <button type="button" class="r-chip" data-cat="goto" role="tab" aria-selected="false">Go-to items</button>
+          </div>
+
+          <div class="r-section-head">
+            <h3 class="r-section-head__title" id="im-results-title">Popular essentials</h3>
+            <span class="r-section-head__meta" id="im-results-count">Showing items</span>
+          </div>
+
+          <div class="r-grid r-grid--tiles" id="im-product-grid">
+            <div class="r-card" aria-hidden="true"><div class="r-skeleton r-skeleton--tile"></div><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div></div>
+            <div class="r-card" aria-hidden="true"><div class="r-skeleton r-skeleton--tile"></div><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tracking and history -->
+      <section class="r-screen" id="pane-tracking" aria-label="Live tracking and order history" hidden>
+        <div class="r-stack r-stack--lg">
+
+          <!-- No active order (default) -->
+          <div class="r-empty" id="no-active-order-box">
+            <div class="r-empty__icon">
+              <svg class="r-icon r-icon--lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-scooter"/></svg>
+            </div>
+            <h2 class="r-empty__title">No active orders.</h2>
+            <p class="r-empty__text">Place an order from the menu or with the concierge and finish checkout to see live tracking, ETA and gate arrival alerts here.</p>
+            <div class="r-empty__actions">
+              <button type="button" class="r-btn r-btn--primary r-btn--pill" onclick="switchTabById('pane-chat')">Order with the concierge</button>
+              <button type="button" class="r-btn r-btn--secondary r-btn--pill" onclick="switchTabById('pane-menu')">Browse menu</button>
+            </div>
+          </div>
+
+          <!-- Active order (shown only while an order is live) -->
+          <div id="active-order-tracking-section" style="display: none;">
+            <div class="r-stack">
+              <div class="r-banner r-banner--warning" id="gate-arrival-alert" role="alert" style="display: none;">
+                <svg class="r-icon r-banner__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-alert"/></svg>
+                <div class="r-banner__body">
+                  <p class="r-banner__title">Rider is almost at your gate</p>
+                  <p class="r-banner__text" id="gate-arrival-alert-msg">Rider <strong>Ravi Kumar</strong> is 2 minutes from your building gate in Rajajinagar. Incoming call triggered.</p>
+                </div>
+                <button type="button" class="r-banner__action r-btn r-btn--secondary r-btn--sm r-btn--pill" onclick="this.closest('.r-banner').style.display='none'">Got it</button>
+              </div>
+
+              <div class="r-card">
+                <div class="r-card__header">
+                  <div>
+                    <h2 class="r-card__title" id="tracking-order-id">Order tracking</h2>
+                    <p class="r-card__sub" id="tracking-items-summary"></p>
+                  </div>
+                  <div class="r-card__aside">
+                    <span class="r-mono-lg" id="tracking-eta">Live ETA</span>
+                    <span class="r-tag r-tag--warn" id="tracking-status-badge">Connecting to Swiggy...</span>
+                  </div>
+                </div>
+
+                <ol class="r-timeline" aria-label="Order progress">
+                  <li class="r-timeline__step is-active" id="step-1" aria-current="step"><span class="r-timeline__bar"></span><span class="r-timeline__label">Confirmed</span></li>
+                  <li class="r-timeline__step" id="step-2"><span class="r-timeline__bar"></span><span class="r-timeline__label">Preparing</span></li>
+                  <li class="r-timeline__step" id="step-3"><span class="r-timeline__bar"></span><span class="r-timeline__label">On the way</span></li>
+                  <li class="r-timeline__step" id="step-4"><span class="r-timeline__bar"></span><span class="r-timeline__label">At the gate</span></li>
+                </ol>
+              </div>
+
+              <div class="r-map" id="live-map" role="img" aria-label="Live delivery partner location map"></div>
+
+              <div class="r-card" id="rider-card">
+                <div class="r-row">
+                  <div class="r-row__lead"><span class="r-avatar r-avatar--a4">RK</span></div>
+                  <div class="r-row__main">
+                    <div class="r-row__title" id="rider-card-name">Ravi Kumar</div>
+                    <div class="r-row__sub" id="rider-card-sub">TVS Jupiter, KA 02 HK 4921, verified Swiggy fleet</div>
+                  </div>
+                  <div class="r-row__trail">
+                    <button type="button" class="r-btn r-btn--icon" id="btn-call-rider" aria-label="Call rider">
+                      <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-phone"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Order history -->
+          <div>
+            <h3 class="r-section-label">Recent orders</h3>
+            <div class="r-card r-card--flush">
+              <ul class="r-list" id="past-orders-list">
+                <li class="r-row" aria-hidden="true"><div class="r-skeleton r-skeleton--circle r-row__lead"></div><div class="r-row__main"><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div></div></li>
+                <li class="r-row" aria-hidden="true"><div class="r-skeleton r-skeleton--circle r-row__lead"></div><div class="r-row__main"><div class="r-skeleton r-skeleton--line"></div><div class="r-skeleton r-skeleton--line-sm"></div></div></li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom tab nav -->
+    <nav class="r-tabbar" aria-label="Main">
+      <div class="r-tabbar__pill" role="tablist">
+        <button type="button" class="r-tabbar__tab is-active" role="tab" data-target="pane-chat" aria-label="Chat" aria-selected="true" aria-current="page" title="Chat">
+          <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chat"/></svg>
+        </button>
+        <button type="button" class="r-tabbar__tab" role="tab" data-target="pane-menu" aria-label="Food" aria-selected="false" title="Food">
+          <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-food"/></svg>
+        </button>
+        <button type="button" class="r-tabbar__tab" role="tab" data-target="pane-instamart" aria-label="Instamart" aria-selected="false" title="Instamart">
+          <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-bag"/></svg>
+        </button>
+        <button type="button" class="r-tabbar__tab" role="tab" data-target="pane-tracking" aria-label="Tracking" aria-selected="false" title="Tracking">
+          <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-scooter"/></svg>
+        </button>
       </div>
-
-      <div class="mic-status" id="mic-status">Tap microphone to speak (Continuous Mode — say "exit" to stop)</div>
-
-      <!-- Quick Action Chips -->
-      <div class="quick-chips" id="quick-action-chips">
-        <!-- Frequent Suggestions (Rendered ONLY if ordered > 3 times) -->
-        <span id="frequent-suggestions-container" style="display: contents;"></span>
-        <button class="chip" data-prompt="Open food cart">🍛 Food Cart</button>
-        <button class="chip" data-prompt="Open instamart cart">⚡ Instamart Cart</button>
-        <button class="chip" data-prompt="Proceed to checkout and payment">💳 Checkout & Pay</button>
-        <button class="chip" data-prompt="Where is my order? Track status">🛵 Live Tracking</button>
-      </div>
-    </section>
-
-    <!-- Navigation Tabs -->
-    <nav class="tabs-nav" aria-label="Main Navigation">
-      <button class="tab-btn active" data-target="pane-chat">
-        <span>💬</span>
-        <span>AI Concierge</span>
-      </button>
-      <!-- Dynamic Restaurant Menu Pills (Rendered ONLY if ordered > 2 times) -->
-      <div id="restaurant-nav-pills" style="display: contents;"></div>
-      <button class="tab-btn" data-target="pane-instamart">
-        <span>⚡</span>
-        <span>Instamart Groceries (10-15m)</span>
-      </button>
-      <button class="tab-btn" data-target="pane-tracking">
-        <span>🛵</span>
-        <span>Live Map Tracking & History</span>
-      </button>
     </nav>
 
-    <!-- TAB 1: AI Chat Stream -->
-    <section class="tab-pane active" id="pane-chat">
-      <div class="chat-container">
-        <div class="chat-messages" id="chat-messages">
-          <div class="msg bot">
-            <div class="avatar">🍛</div>
-            <div class="msg-bubble">
-              👋 Namaste! I am <strong>SmartFlow</strong>, your Swiggy AI Concierge.<br/><br/>
-              I can browse menus, configure add-ons (extra gravy, raita, chicken pieces), organize your cart, and track your delivery on a live map with proactive 2-minute gate arrival phone calls.<br/><br/>
-              <em>Tap the microphone above to speak hands-free or type below!</em>
+    <!-- Cart sheet (drawer from 1024px) -->
+    <div class="r-sheet-layer" id="cart-drawer-overlay" aria-hidden="true">
+      <div class="r-scrim"></div>
+      <section class="r-sheet r-sheet--tall r-sheet--drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-main-title">
+        <div class="r-sheet__grabber"></div>
+        <header class="r-sheet__header">
+          <h2 class="r-sheet__title" id="drawer-main-title">Your cart</h2>
+          <div class="r-cluster">
+            <button type="button" class="r-btn r-btn--ghost r-btn--sm" id="btn-clear-active-cart" title="Clear current cart">Clear</button>
+            <button type="button" class="r-btn r-btn--icon r-sheet__close" id="btn-close-cart" aria-label="Close">
+              <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-close"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="r-sheet__body">
+          <div class="r-stack">
+            <div class="r-chip-rail r-no-scrollbar" id="cart-service-switch" role="tablist" aria-label="Cart type">
+              <button type="button" class="r-chip r-chip--selected" id="btn-switch-food" data-cart="food" role="tab" aria-selected="true">
+                <span>Food</span>
+                <span class="r-chip__count" id="cart-food-count">0</span>
+              </button>
+              <button type="button" class="r-chip" id="btn-switch-im" data-cart="instamart" role="tab" aria-selected="false">
+                <span>Instamart</span>
+                <span class="r-chip__count" id="cart-im-count">0</span>
+              </button>
             </div>
-          </div>
-        </div>
 
-        <div class="chat-input-bar">
-          <input 
-            type="text" 
-            class="chat-input" 
-            id="chat-input" 
-            placeholder="Type or speak: e.g. 'Add 1 Paneer Biryani with extra salan'..." 
-            autocomplete="off"
-          />
-          <button class="btn-send" id="btn-send" aria-label="Send Message">➤</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 2: Categorized Menu & Add-ons -->
-    <section class="tab-pane" id="pane-menu">
-      <div class="restaurant-hero">
-        <div class="restaurant-info">
-          <h2>Meghana Foods</h2>
-          <div class="restaurant-meta">
-            <span class="rating-badge">★ 4.4 (10K+ ratings)</span>
-            <span>⏱️ 25–30 mins</span>
-            <span>📍 Rajajinagar, Bengaluru</span>
-            <span>🍛 Andhra • Biryani • North Indian</span>
-            <span id="restaurant-frequent-badge" style="display: none; background: rgba(255, 82, 0, 0.2); color: #ff5200; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; border: 1px solid rgba(255, 82, 0, 0.4);"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Category Filter Pills -->
-      <div class="category-filter" id="category-filters">
-        <!-- Rendered dynamically via app.js -->
-      </div>
-
-      <!-- Menu Grid -->
-      <div class="menu-grid" id="menu-grid">
-        <!-- Rendered dynamically via app.js -->
-      </div>
-    </section>
-
-    <!-- TAB 3: Swiggy Instamart Groceries -->
-    <section class="tab-pane" id="pane-instamart">
-      <div class="instamart-hero">
-        <div class="im-hero-content">
-          <div class="im-hero-badge" id="im-hero-badge">⚡ SWIGGY INSTAMART • 10–15 MINS</div>
-          <h2>Instant Groceries & Essentials</h2>
-          <p>Order fresh milk, dairy, bread, eggs, farm-fresh produce, snacks, and daily essentials with superfast delivery.</p>
-          
-          <!-- Instamart Search Bar -->
-          <div class="im-search-box">
-            <span class="im-search-icon">🔍</span>
-            <input 
-              type="text" 
-              id="im-search-input" 
-              class="im-search-input" 
-              placeholder="Search milk, bread, eggs, curd, chips, chocolate, vegetables..." 
-              autocomplete="off"
-            />
-            <button class="btn-im-search" id="btn-im-search">Search</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Instamart Category Filter Pills -->
-      <div class="im-category-filter" id="im-category-filters">
-        <button class="im-cat-pill active" data-cat="milk">🥛 Dairy & Milk</button>
-        <button class="im-cat-pill" data-cat="bread">🍞 Bread & Bakery</button>
-        <button class="im-cat-pill" data-cat="eggs">🥚 Eggs & Meat</button>
-        <button class="im-cat-pill" data-cat="snacks">🍿 Snacks & Chips</button>
-        <button class="im-cat-pill" data-cat="drinks">🥤 Drinks & Juices</button>
-        <button class="im-cat-pill" data-cat="fruits">🍎 Fruits & Veggies</button>
-        <button class="im-cat-pill" data-cat="maggi">🍜 Instant Noodles</button>
-        <button class="im-cat-pill" data-cat="goto">⭐ Go-To Items</button>
-      </div>
-
-      <!-- Instamart Active Search Title -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.2rem 0 0.8rem 0;">
-        <div style="font-weight: 700; font-size: 1.05rem; color: #f8fafc;" id="im-results-title">
-          ⚡ Popular Essentials
-        </div>
-        <div style="font-size: 0.82rem; color: #94a3b8;" id="im-results-count">
-          Showing items
-        </div>
-      </div>
-
-      <!-- Instamart Products Grid -->
-      <div class="im-product-grid" id="im-product-grid">
-        <!-- Rendered dynamically via app.js -->
-      </div>
-    </section>
-
-    <!-- TAB 4: Live Tracking & Past Orders -->
-    <section class="tab-pane" id="pane-tracking">
-      <div class="tracking-container">
-        
-        <!-- STATE A: NO ACTIVE ORDER IN TRANSIT (DEFAULT) -->
-        <div id="no-active-order-box" style="text-align: center; padding: 3rem 1.5rem; background: rgba(255, 255, 255, 0.02); border: 1px dashed var(--border-color); border-radius: var(--radius-lg); margin-bottom: 2rem;">
-          <div style="font-size: 3.5rem; margin-bottom: 0.8rem;">🛵</div>
-          <h3 style="font-size: 1.35rem; font-weight: 800; color: white;">No Active Order in Transit</h3>
-          <p style="color: #94a3b8; font-size: 0.94rem; max-width: 520px; margin: 0.6rem auto 1.4rem auto; line-height: 1.6;">
-            You do not have an order currently out for delivery. Place an order from the menu or with the AI Concierge, and complete checkout to activate live GPS map tracking, dynamic ETA, and 2-minute gate arrival phone alerts.
-          </p>
-          <div style="display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap;">
-            <button class="chip" style="padding: 0.6rem 1.4rem; font-size: 0.9rem; background: var(--brand-orange); color: white; border: none; cursor: pointer;" onclick="document.querySelector('[data-target=\'pane-chat\']').click()">
-              💬 Order via AI Concierge
-            </button>
-            <button class="chip" style="padding: 0.6rem 1.4rem; font-size: 0.9rem; background: rgba(255,255,255,0.08); color: white; border: 1px solid var(--border-color); cursor: pointer;" onclick="switchTabById('pane-menu')">
-              🍛 Browse Menu
-            </button>
-          </div>
-        </div>
-
-        <!-- STATE B: DYNAMIC LIVE ORDER TRACKING (SHOWN ONLY WHEN ACTIVE ORDER EXISTS) -->
-        <div id="active-order-tracking-section" style="display: none;">
-          <!-- PROACTIVE 2-MINUTE GATE ARRIVAL ALERT -->
-          <div class="arrival-alert-box" id="gate-arrival-alert" style="display: none;">
-            <div class="alert-content">
-              <div class="alert-icon">🚨</div>
-              <div>
-                <h3 style="color: #f59e0b; font-size: 1.15rem; margin-bottom: 2px;">PROACTIVE 2-MINUTE GATE ARRIVAL ALERT!</h3>
-                <p style="font-size: 0.9rem; color: #cbd5e1;" id="gate-arrival-alert-msg">
-                  Rider <strong>Ravi Kumar</strong> is 2 minutes from your building gate in Rajajinagar. Incoming call triggered!
-                </p>
+            <div class="r-banner r-banner--neutral" id="cart-service-banner" role="status">
+              <span class="r-banner__icon" id="cart-banner-icon">
+                <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-food"/></svg>
+              </span>
+              <div class="r-banner__body">
+                <span class="r-banner__text" id="cart-banner-text">Ordering from <strong>Meghana Foods</strong>, 25 to 30 min</span>
               </div>
             </div>
-            <button class="btn-call" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);" onclick="this.parentElement.style.display='none'">
-              Acknowledge
-            </button>
-          </div>
 
-          <!-- Tracking Status Header -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-            <div>
-              <h3 id="tracking-order-id" style="font-size: 1.25rem; font-weight: 800; color: white;">Order Tracking</h3>
-              <div id="tracking-items-summary" style="font-size: 0.85rem; color: #94a3b8; margin-top: 2px;"></div>
-            </div>
-            <div style="text-align: right;">
-              <span id="tracking-eta" style="color: #10b981; font-weight: 700; font-size: 1.1rem; display: block;">Live ETA</span>
-              <span id="tracking-status-badge" style="font-size: 0.78rem; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 999px;">Connecting to Swiggy...</span>
-            </div>
-          </div>
+            <div class="r-list r-card" id="cart-items-list"></div>
 
-          <!-- Animated Stepper Timeline -->
-          <div class="timeline">
-            <div class="timeline-progress" id="timeline-progress" style="width: 25%;"></div>
-            <div class="step active" id="step-1">
-              <div class="step-circle">✓</div>
-              <div class="step-label">Order Confirmed</div>
-            </div>
-            <div class="step" id="step-2">
-              <div class="step-circle">🍳</div>
-              <div class="step-label">Food Preparing</div>
-            </div>
-            <div class="step" id="step-3">
-              <div class="step-circle">🛵</div>
-              <div class="step-label">On The Way</div>
-            </div>
-            <div class="step" id="step-4">
-              <div class="step-circle">📍</div>
-              <div class="step-label">Gate Arrival (2 Min)</div>
-            </div>
-          </div>
-
-          <!-- LIVE INTERACTIVE LEAFLET ROUTE MAP -->
-          <div style="margin-top: 2rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-              <div style="font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 6px;">
-                <span>🗺️ Live Delivery Partner GPS Tracking</span>
-                <span style="font-size: 0.75rem; background: rgba(16,185,129,0.2); color: #10b981; padding: 2px 8px; border-radius: 999px;">LIVE GPS</span>
+            <div class="r-bill r-card" id="cart-bill-breakdown" style="display: none;">
+              <div class="r-bill__row">
+                <span class="r-bill__label">Item total</span>
+                <span class="r-bill__value" id="bill-item-total">&#8377;0</span>
               </div>
-              <div style="font-size: 0.85rem; color: #94a3b8;">Rajajinagar Delivery Zone</div>
-            </div>
-            <div id="live-map"></div>
-          </div>
-
-          <!-- Rider Profile Card -->
-          <div class="rider-card" id="rider-card">
-            <div class="rider-info">
-              <div class="rider-avatar">🛵</div>
-              <div>
-                <div class="rider-name" id="rider-card-name">Ravi Kumar <span style="color: #f59e0b; font-size: 0.85rem;">★ 4.9 (1.2K+ deliveries)</span></div>
-                <div class="rider-sub" id="rider-card-sub">TVS Jupiter • KA 02 HK 4921 • Verified Swiggy Fleet</div>
+              <div class="r-bill__row">
+                <span class="r-bill__label">Delivery partner fee</span>
+                <span class="r-bill__value r-bill__value--free" id="bill-delivery-fee">Free</span>
+              </div>
+              <div class="r-bill__row">
+                <span class="r-bill__label">Taxes and other charges</span>
+                <span class="r-bill__value" id="bill-taxes">&#8377;0</span>
+              </div>
+              <div class="r-bill__row r-bill__row--total">
+                <span class="r-bill__label">To pay</span>
+                <span class="r-bill__value" id="bill-total-pay">&#8377;0</span>
               </div>
             </div>
-            <button class="btn-call" id="btn-call-rider" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">
-              <span>📞</span> <span>Call Rider</span>
-            </button>
           </div>
         </div>
 
-        <!-- Past Order History -->
-        <div class="past-orders-title" style="margin-top: 3rem;">Recent Swiggy Orders & Instant Reorder</div>
-        <div id="past-orders-list">
-          <!-- Rendered dynamically via app.js -->
-        </div>
+        <!-- Human-in-the-loop explicit approval -->
+        <footer class="r-sheet__footer" id="cart-drawer-footer" style="display: none;">
+          <button type="button" class="r-btn r-btn--primary r-btn--cta" id="btn-approve-order">
+            <span class="r-btn__amount">&#8377;0</span>
+            <span class="r-btn__label">Review and pay</span>
+          </button>
+        </footer>
+      </section>
+    </div>
 
-      </div>
-    </section>
-
-  </main>
-
-  <!-- CART SLIDE-OUT DRAWER -->
-  <div class="cart-drawer-overlay" id="cart-drawer-overlay">
-    <aside class="cart-drawer" aria-label="Shopping Cart">
-      <div class="drawer-header">
-        <div class="drawer-title" id="drawer-main-title">🛒 Swiggy Shopping Cart</div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="btn-clear-cart" id="btn-clear-active-cart" title="Clear current cart">Clear</button>
-          <button class="drawer-close" id="btn-close-cart" aria-label="Close Cart">&times;</button>
-        </div>
-      </div>
-
-      <!-- Segmented Cart Type Switcher -->
-      <div class="cart-service-switch" id="cart-service-switch">
-        <button class="cart-switch-btn active" id="btn-switch-food" data-cart="food">
-          <span>🍛 Food Cart</span>
-          <span class="cart-pill-count" id="cart-food-count">0</span>
-        </button>
-        <button class="cart-switch-btn" id="btn-switch-im" data-cart="instamart">
-          <span>⚡ Instamart</span>
-          <span class="cart-pill-count" id="cart-im-count">0</span>
-        </button>
-      </div>
-
-      <div class="drawer-body">
-        <!-- Service delivery banner -->
-        <div class="cart-service-banner" id="cart-service-banner">
-          <span id="cart-banner-icon">🍛</span>
-          <span id="cart-banner-text">Ordering from <strong>Meghana Foods</strong> • 25–30 mins</span>
-        </div>
-
-        <div id="cart-items-list">
-          <!-- Rendered dynamically via app.js -->
-        </div>
-
-        <!-- Itemized Bill Breakdown -->
-        <div class="bill-breakdown" id="cart-bill-breakdown" style="display: none;">
-          <div class="bill-row">
-            <span>Item Total</span>
-            <span id="bill-item-total">₹0</span>
+    <!-- Add-ons sheet -->
+    <div class="r-sheet-layer" id="addons-modal" aria-hidden="true">
+      <div class="r-scrim"></div>
+      <section class="r-sheet" role="dialog" aria-modal="true" aria-labelledby="addon-dish-name">
+        <div class="r-sheet__grabber"></div>
+        <header class="r-sheet__header">
+          <div>
+            <h2 class="r-sheet__title" id="addon-dish-name">Meghana Special Chicken Biryani</h2>
+            <p class="r-sheet__subtitle" id="addon-base-price">Base: &#8377;369</p>
           </div>
-          <div class="bill-row">
-            <span>Delivery Partner Fee</span>
-            <span id="bill-delivery-fee" style="color: #10b981; font-weight: 600;">FREE</span>
-          </div>
-          <div class="bill-row">
-            <span>Govt Taxes & Other Charges</span>
-            <span id="bill-taxes">₹0</span>
-          </div>
-          <div class="bill-row total">
-            <span>To Pay</span>
-            <span id="bill-total-pay">₹0</span>
+          <button type="button" class="r-btn r-btn--icon r-sheet__close" id="btn-close-addons" aria-label="Close">
+            <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </header>
+
+        <div class="r-sheet__body">
+          <p class="r-section-label">Customise and add-ons</p>
+          <div class="r-list r-card">
+            <label class="r-row r-row--interactive">
+              <span class="r-row__main"><span class="r-row__title">Extra Andhra salan / gravy</span></span>
+              <span class="r-row__trail"><span class="r-row__amount">+&#8377;40</span><span class="r-check"><input class="r-check__input" type="checkbox" data-price="40" /><span class="r-check__box"></span></span></span>
+            </label>
+            <label class="r-row r-row--interactive">
+              <span class="r-row__main"><span class="r-row__title">Special onion raita (large)</span></span>
+              <span class="r-row__trail"><span class="r-row__amount">+&#8377;35</span><span class="r-check"><input class="r-check__input" type="checkbox" data-price="35" /><span class="r-check__box"></span></span></span>
+            </label>
+            <label class="r-row r-row--interactive">
+              <span class="r-row__main"><span class="r-row__title">Extra chicken pieces (2 pcs)</span></span>
+              <span class="r-row__trail"><span class="r-row__amount">+&#8377;90</span><span class="r-check"><input class="r-check__input" type="checkbox" data-price="90" /><span class="r-check__box"></span></span></span>
+            </label>
+            <label class="r-row r-row--interactive">
+              <span class="r-row__main"><span class="r-row__title">Roasted papad and lemon slices</span></span>
+              <span class="r-row__trail"><span class="r-row__amount">+&#8377;25</span><span class="r-check"><input class="r-check__input" type="checkbox" data-price="25" /><span class="r-check__box"></span></span></span>
+            </label>
           </div>
         </div>
-      </div>
 
-      <!-- Human-in-the-Loop Explicit Approval Button -->
-      <div class="drawer-footer" id="cart-drawer-footer" style="display: none;">
-        <button class="btn-approve-order" id="btn-approve-order">
-          Approve & Pay
-        </button>
-      </div>
-    </aside>
-  </div>
-
-  <!-- ADD-ONS CUSTOMIZATION MODAL -->
-  <div class="modal-overlay" id="addons-modal">
-    <div class="modal-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-        <h3 id="addon-dish-name" style="font-size: 1.2rem; font-weight: 700;">Meghana Special Chicken Biryani</h3>
-        <button class="drawer-close" id="btn-close-addons">&times;</button>
-      </div>
-      <div id="addon-base-price" style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.2rem; text-align: left;">
-        Base: ₹369
-      </div>
-
-      <div style="text-align: left; margin-bottom: 1.5rem;">
-        <div style="font-weight: 700; margin-bottom: 0.8rem; font-size: 0.95rem; color: #f8fafc;">
-          Customize & Add-ons
-        </div>
-
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;">
-          <span style="font-size: 0.92rem;"><input type="checkbox" data-price="40" style="margin-right: 8px;" /> Extra Andhra Salan / Gravy</span>
-          <span style="color: #f59e0b; font-weight: 700;">+₹40</span>
-        </label>
-
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;">
-          <span style="font-size: 0.92rem;"><input type="checkbox" data-price="35" style="margin-right: 8px;" /> Special Onion Raita (Large)</span>
-          <span style="color: #f59e0b; font-weight: 700;">+₹35</span>
-        </label>
-
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;">
-          <span style="font-size: 0.92rem;"><input type="checkbox" data-price="90" style="margin-right: 8px;" /> Extra Chicken Pieces (2 pcs)</span>
-          <span style="color: #f59e0b; font-weight: 700;">+₹90</span>
-        </label>
-
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; cursor: pointer;">
-          <span style="font-size: 0.92rem;"><input type="checkbox" data-price="25" style="margin-right: 8px;" /> Roasted Papad & Lemon Slices</span>
-          <span style="color: #f59e0b; font-weight: 700;">+₹25</span>
-        </label>
-      </div>
-
-      <button class="btn-approve-order" id="addon-total-btn">
-        Add to Cart • ₹369
-      </button>
+        <footer class="r-sheet__footer">
+          <button type="button" class="r-btn r-btn--primary r-btn--cta" id="addon-total-btn">
+            <span class="r-btn__amount">&#8377;369</span>
+            <span class="r-btn__label">Add to cart</span>
+          </button>
+        </footer>
+      </section>
     </div>
-  </div>
 
-  <!-- REAL UPI CHECKOUT & PAYMENT MODAL -->
-  <div class="modal-overlay" id="payment-modal">
-    <div class="modal-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-        <h3 style="font-size: 1.25rem;">Swiggy UPI Checkout</h3>
-        <button class="drawer-close" id="btn-close-payment">&times;</button>
-      </div>
+    <!-- UPI checkout sheet -->
+    <div class="r-sheet-layer" id="payment-modal" aria-hidden="true">
+      <div class="r-scrim"></div>
+      <section class="r-sheet" role="dialog" aria-modal="true" aria-labelledby="pay-sheet-title">
+        <div class="r-sheet__grabber"></div>
+        <header class="r-sheet__header">
+          <div>
+            <h2 class="r-sheet__title" id="pay-sheet-title">Swiggy UPI checkout</h2>
+            <p class="r-sheet__subtitle">Order <span class="r-code" id="pay-order-id"></span></p>
+          </div>
+          <button type="button" class="r-btn r-btn--icon r-sheet__close" id="btn-close-payment" aria-label="Close">
+            <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </header>
 
-      <div style="font-size: 0.88rem; color: #94a3b8;">
-        Order Reference: <span id="pay-order-id" style="color: white; font-weight: 700;">#250370392194033</span>
-      </div>
+        <div class="r-sheet__body">
+          <div class="r-pay">
+            <div class="r-pay__amount">
+              <span class="r-amount r-amount--md" id="pay-modal-amount"><span class="r-amount__sym">&#8377;</span>0</span>
+            </div>
+            <input type="hidden" name="pay-method" value="UPI" id="pay-method-input" />
+            <span class="r-tag r-tag--success r-pay__method">UPI</span>
 
-      <div style="font-size: 2.2rem; font-weight: 800; color: #ff5200; margin: 0.4rem 0;" id="pay-modal-amount">
-        ₹427
-      </div>
+            <div id="qr-section">
+              <p class="r-section-label">Open a UPI app</p>
+              <div class="r-pay__apps">
+                <button type="button" class="r-pay__app r-btn r-btn--secondary r-btn--pill" id="btn-pay-gpay">Google Pay</button>
+                <button type="button" class="r-pay__app r-btn r-btn--secondary r-btn--pill" id="btn-pay-phonepe">PhonePe</button>
+                <button type="button" class="r-pay__app r-btn r-btn--secondary r-btn--pill" id="btn-pay-paytm">Paytm</button>
+                <button type="button" class="r-pay__app r-btn r-btn--secondary r-btn--pill" id="btn-pay-cred">CRED</button>
+              </div>
 
-      <!-- Payment Method: UPI Only (Cash on Delivery disabled) -->
-      <div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin: 0.8rem 0;">
-        <input type="hidden" name="pay-method" value="UPI" id="pay-method-input" />
-        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 5px 14px; border-radius: 999px; font-weight: 600; font-size: 0.85rem; letter-spacing: 0.3px;">
-          ⚡ UPI Only • Fast & Contactless
-        </span>
-      </div>
+              <div class="r-pay__divider"><span>or scan</span></div>
 
-      <!-- QR Code & One-Click App Pay Section -->
-      <div id="qr-section">
-        <!-- Direct UPI Apps Buttons -->
-        <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 0.4rem;">Tap to open UPI app directly:</div>
-        <div class="upi-apps-grid">
-          <button class="upi-pill-btn" id="btn-pay-gpay">🔵 Google Pay</button>
-          <button class="upi-pill-btn" id="btn-pay-phonepe">🟣 PhonePe</button>
-          <button class="upi-pill-btn" id="btn-pay-paytm">🔷 Paytm</button>
-          <button class="upi-pill-btn" id="btn-pay-cred">⚪ CRED</button>
+              <div class="r-pay__qr r-card">
+                <img class="r-pay__qr-img" id="swiggy-qr-img" alt="Swiggy UPI QR code" />
+              </div>
+
+              <div class="r-pay__vpa">
+                <span class="r-code" id="upi-vpa-text"></span>
+                <button type="button" class="r-btn r-btn--secondary r-btn--sm r-pay__copy" id="btn-copy-upi">Copy UPI ID</button>
+              </div>
+            </div>
+
+            <p class="r-pay__trust">Secure UPI payment. Scan with any UPI app or tap an app above.</p>
+          </div>
         </div>
 
-        <div class="qr-box">
-          <img id="swiggy-qr-img" class="qr-img" src="" alt="Swiggy UPI QR Code" />
-        </div>
-
-        <!-- Copy UPI Row -->
-        <div class="copy-row">
-          <span style="color: #cbd5e1; font-family: monospace;" id="upi-vpa-text">swiggyupi@axb</span>
-          <button class="copy-btn" id="btn-copy-upi">Copy UPI ID</button>
-        </div>
-
-        <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.4rem;">
-          Scan with any UPI app on your phone, or tap an app above to pay.
-        </p>
-      </div>
-
-      <button class="btn-approve-order" id="btn-final-pay" style="margin-top: 1rem;">
-        I Have Paid • Track Order 🛵
-      </button>
+        <footer class="r-sheet__footer">
+          <button type="button" class="r-btn r-btn--primary r-btn--cta" id="btn-final-pay">
+            <span class="r-btn__label">I have paid, track order</span>
+          </button>
+        </footer>
+      </section>
     </div>
-  </div>
 
-  <!-- ADDRESS SELECTION MODAL -->
-  <div class="modal-overlay" id="address-modal">
-    <div class="modal-content" style="max-width: 500px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-        <h3 style="font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
-          <span>📍</span> Select Delivery Location
-        </h3>
-        <button class="drawer-close" id="btn-close-address">&times;</button>
-      </div>
-
-      <p style="font-size: 0.84rem; color: #94a3b8; margin-bottom: 1.2rem; line-height: 1.4;">
-        Tap any saved Swiggy address below, or speak naturally: <em style="color:#ff5200">"update my address to Work"</em> or <em style="color:#ff5200">"deliver to my hostel"</em>.
-      </p>
-
-      <div class="address-list" id="address-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 360px; overflow-y: auto; padding-right: 4px;">
-        <!-- Saved addresses rendered here -->
-      </div>
-    </div>
-  </div>
-
-  <!-- SWIGGY OAUTH & OTP MODAL -->
-  <div class="modal-overlay" id="swiggy-modal">
-    <div class="modal-content" style="max-width: 440px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-        <h3 style="font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
-          <span>🟠</span> Connect Swiggy Account
-        </h3>
-        <button class="drawer-close" id="btn-close-swiggy">&times;</button>
-      </div>
-
-      <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.2rem; line-height: 1.4;">
-        Connect your Swiggy account to synchronize your real-time cart, addresses, and live order tracking.
-      </p>
-
-      <!-- Step: Already Connected Status -->
-      <div id="swiggy-step-connected" style="display:none; text-align:center;">
-        <div style="font-size: 2.8rem; margin-bottom: 0.5rem;">🟢</div>
-        <h4 style="font-size: 1.15rem; color: #10b981; margin-bottom: 0.4rem; font-weight: 700;">Swiggy is Connected</h4>
-        <p style="font-size: 0.84rem; color: #94a3b8; margin-bottom: 1.2rem;">
-          Real-time MCP synchronization is active for live carts, addresses, and tracking.
-        </p>
-        <button id="btn-swiggy-disconnect" class="btn" style="width:100%; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 11px; border-radius: 8px; font-weight: 600; cursor: pointer; margin-bottom: 8px; font-size:0.9rem;">
-          Disconnect Swiggy Account
-        </button>
-        <button id="btn-swiggy-relogin" style="background:none; border:none; color: #fc8019; font-size: 0.82rem; cursor: pointer; text-decoration: underline;">
-          Switch Mobile Number / Re-enter OTP
-        </button>
-      </div>
-
-      <!-- Step 1: Instant Connect & Mobile Number Input -->
-      <div id="swiggy-step-phone">
-        <!-- 1-Click Instant Connect Button -->
-        <button id="btn-swiggy-quick-connect" class="btn" style="width:100%; background: linear-gradient(135deg, #10b981, #059669); color:#fff; padding:12px; border-radius:8px; font-weight:700; border:none; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 4px 12px rgba(16,185,129,0.3); margin-bottom: 1.1rem;">
-          <span>⚡</span> 1-Click Instant Connect
-        </button>
-
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.1rem;">
-          <hr style="flex:1; border:none; border-top:1px solid rgba(255,255,255,0.12);" />
-          <span style="font-size:0.74rem; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Or Login via SMS OTP</span>
-          <hr style="flex:1; border:none; border-top:1px solid rgba(255,255,255,0.12);" />
+    <!-- Address sheet -->
+    <div class="r-sheet-layer" id="address-modal" aria-hidden="true">
+      <div class="r-scrim"></div>
+      <section class="r-sheet" role="dialog" aria-modal="true" aria-labelledby="address-sheet-title">
+        <div class="r-sheet__grabber"></div>
+        <header class="r-sheet__header">
+          <div>
+            <h2 class="r-sheet__title" id="address-sheet-title">Delivery location</h2>
+            <p class="r-sheet__subtitle">Tap a saved Swiggy address, or say "deliver to my hostel".</p>
+          </div>
+          <button type="button" class="r-btn r-btn--icon r-sheet__close" id="btn-close-address" aria-label="Close">
+            <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </header>
+        <div class="r-sheet__body">
+          <div class="r-card r-card--flush">
+            <ul class="r-list" id="address-list"></ul>
+          </div>
         </div>
-
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:#cbd5e1; margin-bottom:6px;">Mobile Number</label>
-        <div style="display:flex; gap:8px; margin-bottom:14px;">
-          <span style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); padding:10px 14px; border-radius:8px; font-weight:600; color:#fff; display:flex; align-items:center; gap:4px;">🇮🇳 +91</span>
-          <input type="tel" id="swiggy-phone-input" value="9390787901" maxlength="10" placeholder="10-digit phone number"
-            style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); padding:10px 14px; border-radius:8px; color:#fff; font-size:1.05rem; outline:none;" />
-        </div>
-        <button id="btn-swiggy-send-otp" class="btn" style="width:100%; background:#fc8019; color:#fff; padding:12px; border-radius:8px; font-weight:700; border:none; cursor:pointer; font-size:0.95rem;">
-          Send OTP
-        </button>
-      </div>
-
-      <!-- Step 2: OTP Input (Hidden by default) -->
-      <div id="swiggy-step-otp" style="display:none;">
-        <p style="font-size:0.85rem; color:#10b981; margin-bottom:10px; font-weight:500;" id="swiggy-otp-sent-msg">
-          ✓ OTP sent to your phone via Swiggy.
-        </p>
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:#cbd5e1; margin-bottom:6px;">Enter 6-Digit OTP <span style="font-size:0.75rem; color:#94a3b8; font-weight:400;">(SMS OTP or 123456)</span></label>
-        <input type="text" id="swiggy-otp-input" maxlength="6" placeholder="• • • • • •"
-          style="width:100%; box-sizing:border-box; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); padding:12px 14px; border-radius:8px; color:#fff; font-size:1.4rem; letter-spacing:6px; text-align:center; outline:none; margin-bottom:14px;" />
-        <button id="btn-swiggy-verify-otp" class="btn" style="width:100%; background:#10b981; color:#fff; padding:12px; border-radius:8px; font-weight:700; border:none; cursor:pointer; margin-bottom:10px; font-size:0.95rem;">
-          Verify OTP & Connect
-        </button>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <button id="btn-swiggy-resend-otp" style="background:none; border:none; color:#fc8019; font-size:0.82rem; cursor:pointer; padding:4px 0;">Resend OTP</button>
-          <button id="btn-swiggy-change-phone" style="background:none; border:none; color:#94a3b8; font-size:0.82rem; cursor:pointer; padding:4px 0;">Change Number</button>
-        </div>
-      </div>
-
-      <!-- Alternative: Browser tab link -->
-      <div style="margin-top:1.2rem; padding-top:1rem; border-top:1px solid rgba(255,255,255,0.1); text-align:center;">
-        <button id="btn-swiggy-browser-flow" style="background:none; border:none; color:#94a3b8; font-size:0.82rem; cursor:pointer; text-decoration:underline;">
-          Or open official Swiggy login in a fresh tab ↗
-        </button>
-      </div>
+      </section>
     </div>
+
+    <!-- Swiggy connect sheet -->
+    <div class="r-sheet-layer" id="swiggy-modal" aria-hidden="true">
+      <div class="r-scrim"></div>
+      <section class="r-sheet" role="dialog" aria-modal="true" aria-labelledby="swiggy-sheet-title">
+        <div class="r-sheet__grabber"></div>
+        <header class="r-sheet__header">
+          <div>
+            <h2 class="r-sheet__title" id="swiggy-sheet-title">Connect Swiggy account</h2>
+            <p class="r-sheet__subtitle">Sync your live cart, addresses and order tracking.</p>
+          </div>
+          <button type="button" class="r-btn r-btn--icon r-sheet__close" id="btn-close-swiggy" aria-label="Close">
+            <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </header>
+
+        <div class="r-sheet__body">
+          <!-- Step: connected -->
+          <div id="swiggy-step-connected" style="display: none;">
+            <div class="r-stack">
+              <div class="r-banner r-banner--success" role="status">
+                <div class="r-banner__body">
+                  <p class="r-banner__title">Swiggy is connected</p>
+                  <p class="r-banner__text">Real-time sync is active for live carts, addresses and tracking.</p>
+                </div>
+              </div>
+              <button type="button" class="r-btn r-btn--danger-quiet r-btn--block" id="btn-swiggy-disconnect">Disconnect Swiggy account</button>
+              <button type="button" class="r-btn r-btn--ghost r-btn--sm" id="btn-swiggy-relogin">Switch mobile number or re-enter OTP</button>
+            </div>
+          </div>
+
+          <!-- Step 1: phone -->
+          <div id="swiggy-step-phone">
+            <div class="r-stack">
+              <button type="button" class="r-btn r-btn--primary r-btn--cta" id="btn-swiggy-quick-connect">
+                <svg class="r-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-bolt"/></svg>
+                <span class="r-btn__label">1-click instant connect</span>
+              </button>
+
+              <p class="r-section-label">Or sign in with SMS OTP</p>
+
+              <div class="r-field">
+                <label class="r-field__label" for="swiggy-phone-input">Mobile number</label>
+                <div class="r-field__control">
+                  <span class="r-field__prefix">+91</span>
+                  <input class="r-field__input" type="tel" id="swiggy-phone-input" value="9390787901" maxlength="10" inputmode="tel" autocomplete="tel-national" placeholder="10-digit phone number" />
+                </div>
+              </div>
+
+              <button type="button" class="r-btn r-btn--secondary r-btn--cta" id="btn-swiggy-send-otp">
+                <span class="r-btn__label">Send OTP</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: OTP -->
+          <div id="swiggy-step-otp" style="display: none;">
+            <div class="r-stack">
+              <div class="r-banner r-banner--success" id="swiggy-otp-sent-msg" role="status">
+                <div class="r-banner__body"><p class="r-banner__text">OTP sent to your phone via Swiggy.</p></div>
+              </div>
+
+              <div class="r-field">
+                <label class="r-field__label" for="swiggy-otp-input">Enter 6-digit OTP</label>
+                <div class="r-otp">
+                  <input class="r-otp__input" type="text" id="swiggy-otp-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" aria-label="6-digit OTP" />
+                  <div class="r-otp__boxes" aria-hidden="true">
+                    <span class="r-otp__box"></span>
+                    <span class="r-otp__box"></span>
+                    <span class="r-otp__box"></span>
+                    <span class="r-otp__box"></span>
+                    <span class="r-otp__box"></span>
+                    <span class="r-otp__box"></span>
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" class="r-btn r-btn--primary r-btn--cta" id="btn-swiggy-verify-otp">
+                <span class="r-btn__label">Verify OTP and connect</span>
+              </button>
+
+              <div class="r-cluster">
+                <button type="button" class="r-btn r-btn--ghost r-btn--sm" id="btn-swiggy-resend-otp">Resend OTP</button>
+                <button type="button" class="r-btn r-btn--ghost r-btn--sm" id="btn-swiggy-change-phone">Change number</button>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" class="r-btn r-btn--ghost r-btn--sm r-btn--block" id="btn-swiggy-browser-flow">Or open the official Swiggy login in a new tab</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Call sheet -->
+    <div class="r-sheet-layer" id="phone-call-overlay" aria-hidden="true">
+      <div class="r-scrim"></div>
+      <section class="r-sheet r-sheet--white r-call" role="dialog" aria-modal="true" aria-labelledby="call-caller-name">
+        <div class="r-sheet__grabber"></div>
+        <header class="r-sheet__header">
+          <span class="r-call__eyebrow" id="call-status-label">Incoming call</span>
+          <span class="r-call__clock" id="call-active-timer" style="display: none;">00:00</span>
+        </header>
+        <div class="r-sheet__body">
+          <h2 class="r-call__name" id="call-caller-name">Swiggy Concierge / Rider Ravi</h2>
+          <p class="r-call__number r-code" id="call-number">+91 80 6746 6746 (Rajajinagar hub)</p>
+          <p class="r-call__status">Automated gate arrival call.</p>
+        </div>
+        <footer class="r-sheet__footer">
+          <div class="r-call__actions" id="call-incoming-actions">
+            <button type="button" class="r-btn r-btn--danger r-btn--cta" id="btn-call-decline">Decline</button>
+            <button type="button" class="r-btn r-btn--success r-btn--cta" id="btn-call-accept">Accept</button>
+          </div>
+          <div class="r-call__actions" id="call-active-actions" style="display: none;">
+            <button type="button" class="r-btn r-btn--danger r-btn--block" id="btn-call-hangup">End call</button>
+          </div>
+        </footer>
+      </section>
+    </div>
+
+    <!-- Toast -->
+    <div class="r-toast" id="toast" role="status" aria-live="polite"></div>
+
   </div>
 
-  <!-- INCOMING PHONE CALL SIMULATION OVERLAY -->
-  <div class="phone-call-overlay" id="phone-call-overlay">
-    <div class="phone-call-modal">
-      <div class="call-status-label" id="call-status-label">INCOMING CALL</div>
-      <div class="phone-avatar-glow">🛵</div>
-      <h2 class="call-caller-name" id="call-caller-name">Swiggy Concierge / Rider Ravi</h2>
-      <div class="call-number" id="call-number">+91 80 6746 6746 (Rajajinagar Hub)</div>
-      <div id="call-active-timer" style="display:none; font-size:1.2rem; font-weight:700; color:#10b981; margin-bottom:1.5rem;">00:00</div>
-
-      <div class="call-actions-row" id="call-incoming-actions">
-        <button class="btn-call-circle btn-call-decline" id="btn-call-decline" title="Decline Call">✕</button>
-        <button class="btn-call-circle btn-call-accept" id="btn-call-accept" title="Accept Call">📞</button>
-      </div>
-      <div class="call-actions-row" id="call-active-actions" style="display:none;">
-        <button class="btn-call-circle btn-call-decline" id="btn-call-hangup" title="End Call" style="margin: 0 auto;">✕</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast Notification Container -->
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <!-- JavaScript Modules -->
+  <!-- JavaScript modules -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/js/api.js?v=12"></script>
   <script src="/static/js/voice.js?v=12"></script>
