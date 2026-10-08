@@ -320,13 +320,12 @@
      composer-bottom + this so the last message is never covered. */
   --r-composer-height:112px;
   /* chat column (DERIVED): readable measure, ~75 characters at 15px. Rally has no
-     web layout; its phone frame is 412px, the column widens to 640 from 768. */
-  --r-chat-max:640px;
+     web layout; its phone frame is 412px, the column caps at 720. */
+  --r-chat-max:720px;
   /* thread bottom clearance: composer-bottom + composer-height + status line (18)
      + its gap (12) + breathing room (26) = 56. composer-height itself excludes
      the status line, which Rally does not have. */
   --r-chat-clearance:calc(var(--r-composer-bottom) + var(--r-composer-height) + var(--sp-1200));
-  --r-radius-msg:20px;         /* rally-ai.jsx aiCard / ChatPhone bubble radius */
 
   /* --- z-index scale ----------------------------------------------------------
    * Every number is one Rally already uses:
@@ -508,7 +507,7 @@ input, select, textarea { font-size: 16px }
 @keyframes sp-shimmer  { from { background-position: 180% 0 } to { background-position: -20% 0 } }
 @keyframes sp-spin     { from { left: -45% } to { left: 100% } }   /* 22x2 inline sweep, on dark */
 @keyframes sp-ring     { from { left: -40% } to { left: 100% } }   /* 76x3 wait sweep, on light (name is Rally's; it is linear) */
-@keyframes r-msg-in    { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@keyframes r-msg-in    { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
 @keyframes r-typing-dot{ 0%,80%,100% { opacity: .25 } 40% { opacity: 1 } }
 @keyframes r-wave-bar  { 0%,100% { transform: scaleY(.3) } 50% { transform: scaleY(1) } }
 

@@ -1078,6 +1078,31 @@ function setupChat() {
   });
 }
 
+// SmartFlow mark shown beside agent messages (decorative, so hidden from assistive tech)
+const AGENT_AVATAR_HTML = `<span class="r-msg__avatar" aria-hidden="true">
+  <svg viewBox="0 0 28 28" width="28" height="28" focusable="false"><path d="M19 9.5c-1.2-1.3-3-2-5-2-3 0-5 1.5-5 3.7 0 2.4 2.1 3.1 5 3.8 2.9.7 5 1.4 5 3.8 0 2.2-2 3.7-5 3.7-2.2 0-4.1-.8-5.3-2.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+</span>`;
+
+// Scrolls the page so the end of the thread (with its composer clearance) is visible
+function scrollChatToEnd(container) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  container.scrollIntoView({ block: 'end', behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+
+// Messenger grouping: consecutive messages from one sender sit close together;
+// the avatar and the timestamp appear only on the last message of a group.
+function refreshMessageGrouping(container) {
+  const messages = Array.from(container.children).filter((el) => el.classList.contains('r-msg'));
+  const senderOf = (el) => (el.classList.contains('r-msg--user') ? 'user' : 'agent');
+  messages.forEach((el, i) => {
+    const sender = senderOf(el);
+    const prev = messages[i - 1];
+    const next = messages[i + 1];
+    el.classList.toggle('r-msg--grouped', Boolean(prev) && senderOf(prev) === sender);
+    el.classList.toggle('r-msg--last', !next || senderOf(next) !== sender);
+  });
+}
+
 function addChatMessage(role, text) {
   const container = document.getElementById('chat-messages');
   const isUser = role === 'user';
@@ -1108,13 +1133,20 @@ function addChatMessage(role, text) {
         .join('')}</div>`
     : '';
 
-  msgEl.innerHTML = `<div class="r-msg__bubble">${formattedText}${actionsHtml}</div>`;
+  const now = new Date();
+  const clock = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  msgEl.innerHTML = `
+    <div class="r-msg__row">
+      ${isUser ? '' : AGENT_AVATAR_HTML}
+      <div class="r-msg__bubble">${formattedText}${actionsHtml}</div>
+    </div>
+    <time class="r-msg__time" datetime="${now.toISOString()}">${clock}</time>`;
   msgEl.querySelectorAll('[data-tab]').forEach((chip) => {
     chip.addEventListener('click', () => switchTabById(chip.dataset.tab));
   });
   container.appendChild(msgEl);
-  // The page scrolls (not the thread); bring the end of the thread, with its composer clearance, into view
-  container.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  refreshMessageGrouping(container);
+  scrollChatToEnd(container);
 }
 
 function showTypingIndicator() {
@@ -1123,20 +1155,26 @@ function showTypingIndicator() {
   typing.id = 'typing-indicator';
   typing.className = 'r-msg r-msg--agent';
   typing.innerHTML = `
-    <div class="r-typing" role="status">
-      <span class="r-visually-hidden">SmartFlow is thinking</span>
-      <span class="r-typing__dot"></span>
-      <span class="r-typing__dot"></span>
-      <span class="r-typing__dot"></span>
-    </div>
-  `;
+    <div class="r-msg__row">
+      ${AGENT_AVATAR_HTML}
+      <div class="r-msg__bubble r-typing" role="status">
+        <span class="r-visually-hidden">SmartFlow is thinking</span>
+        <span class="r-typing__dot"></span>
+        <span class="r-typing__dot"></span>
+        <span class="r-typing__dot"></span>
+      </div>
+    </div>`;
   container.appendChild(typing);
-  container.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  refreshMessageGrouping(container);
+  scrollChatToEnd(container);
 }
 
 function removeTypingIndicator() {
   const el = document.getElementById('typing-indicator');
-  if (el) el.remove();
+  if (!el) return;
+  const container = el.parentElement;
+  el.remove();
+  refreshMessageGrouping(container);
 }
 
 // --- MENU & ADD-ONS ---

@@ -186,46 +186,100 @@
 .r-chat__welcome-title { font: 700 var(--sp-heading-md-size)/var(--sp-heading-md-lh) var(--sp-font-secondary); letter-spacing: -.015em; text-wrap: balance }
 .r-chat__welcome-text { max-width: 280px; font: 400 var(--sp-para-md-size)/var(--sp-para-md-lh) var(--sp-font-primary); color: var(--sp-content-secondary) }
 
-/* Rally AI thread (rally-ai.jsx renderTurn, variant C): the user's line is quiet
-   right-aligned text with no container; the answer is a white 20px card.
-   Turns are 10px apart. The thread sits inside the page gutter. */
+/* Messenger thread: user bubbles are Safety Blue on the right, agent bubbles are
+   white on the left beside a 28px avatar. Same sender: 4px apart; new sender: 16px.
+   Avatar and timestamp show on the last message of each group only. */
 .r-chat__thread {
+  --r-msg-max: 80%;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-500);
   width: 100%;
   max-width: var(--r-chat-max);
   margin-inline: auto;
   padding: var(--sp-500) 0 var(--r-chat-clearance);
 }
 .r-chat__thread:empty { padding-block: 0 }
+@media (min-width: 768px) {
+  .r-chat__thread { --r-msg-max: min(65%, 520px) }
+}
 
-.r-msg { display: flex; justify-content: flex-start; min-width: 0; animation: r-msg-in 380ms var(--sp-ease-elegant) both }
-.r-msg--user { justify-content: flex-end }
+.r-msg {
+  --r-avatar: 28px;
+  --r-avatar-gap: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  margin-top: var(--sp-600);
+  animation: r-msg-in 160ms var(--sp-ease-elegant) both;
+}
+.r-msg:first-child { margin-top: 0 }
+.r-msg--grouped { margin-top: var(--sp-200) }
+.r-msg--user { align-items: flex-end }
+
+.r-msg__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--r-avatar-gap);
+  min-width: 0;
+  max-width: var(--r-msg-max);
+}
+.r-msg--agent .r-msg__row { max-width: calc(var(--r-msg-max) + var(--r-avatar) + var(--r-avatar-gap)) }
+/* Rich content (restaurant card, QR) may use the whole column on phones */
+@media (max-width: 767.98px) {
+  .r-msg--agent .r-msg__row:has(.r-msg__bubble > .r-card, .r-msg__bubble > .r-pay__qr, .r-msg__bubble > .r-list) { max-width: 100%; width: 100% }
+  .r-msg__row:has(.r-msg__bubble > .r-card, .r-msg__bubble > .r-pay__qr, .r-msg__bubble > .r-list) .r-msg__bubble { flex: 1 }
+}
+
+.r-msg__avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--r-avatar);
+  height: var(--r-avatar);
+  border-radius: var(--sp-r-avatar);
+  background: var(--sp-content-primary);
+  color: var(--sp-bg-primary);
+}
+.r-msg__avatar svg { display: block }
+/* Keeps the column aligned while hiding the avatar on non-final messages of a group */
+.r-msg:not(.r-msg--last) .r-msg__avatar { visibility: hidden }
+
 .r-msg__bubble {
   min-width: 0;
-  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 18px;
   font: 400 15px/1.4 var(--sp-font-primary);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 .r-msg--agent .r-msg__bubble {
-  width: 100%;
-  padding: var(--sp-600);
-  border-radius: var(--r-radius-msg);
+  border: 1px solid var(--sp-border-hairline);
+  border-bottom-left-radius: 6px;
   background: var(--sp-bg-primary);
   color: var(--sp-content-primary);
+  box-shadow: 0 1px 2px rgb(16 16 16 / .06);
 }
 .r-msg--user .r-msg__bubble {
-  max-width: 80%;
-  padding: 0 var(--sp-200);
-  background: none;
-  color: var(--sp-ink-sec);
-  text-align: right;
+  border-bottom-right-radius: 6px;
+  background: var(--sp-bg-accent);
+  color: var(--sp-content-inverted-primary);
 }
+
+.r-msg__time {
+  display: none;
+  margin-top: var(--sp-200);
+  font: 400 12px/16px var(--sp-font-primary);
+  color: var(--sp-ink-sec);
+}
+.r-msg--last .r-msg__time { display: block }
+.r-msg--agent .r-msg__time { padding-left: calc(var(--r-avatar) + var(--r-avatar-gap)) }
+#typing-indicator .r-msg__time { display: none }
+
 .r-msg__bubble strong { font-weight: 700 }
 .r-msg__bubble em { font-style: normal; font-weight: 500 }
 .r-msg--agent .r-msg__bubble a { color: var(--sp-content-accent); text-decoration: underline; text-underline-offset: 2px }
+.r-msg--user .r-msg__bubble a { color: inherit; text-decoration: underline; text-underline-offset: 2px }
 .r-msg__bubble img,
 .r-msg__bubble svg,
 .r-msg__bubble video,
@@ -240,11 +294,11 @@
 .r-msg__bubble pre { margin: var(--sp-500) 0 0; padding: var(--sp-500) var(--sp-600); overflow-x: auto; white-space: pre }
 .r-msg__bubble pre code { padding: 0; background: none }
 
-/* Inline cards, QR and lists inside an answer: Rally's inner box, quiet surface, no shadow */
+/* Inline cards, QR and lists inside an agent bubble: quiet inner surface, no shadow */
 .r-msg__bubble > .r-card,
 .r-msg__bubble > .r-pay__qr,
 .r-msg__bubble > .r-list {
-  margin-top: var(--sp-500);
+  margin-top: var(--sp-400);
   border-radius: var(--sp-r-tile);
   background: var(--sp-bg-quiet);
   box-shadow: none;
@@ -254,18 +308,16 @@
 .r-msg__bubble > .r-pay__qr .r-pay__qr-img { width: min(220px, 100%) }
 .r-msg__bubble > .r-card .r-card__title { font-size: var(--sp-label-lg-size); line-height: var(--sp-label-lg-lh) }
 
-.r-msg__actions { display: flex; flex-wrap: wrap; gap: var(--sp-300); margin-top: var(--sp-500); text-align: left }
+.r-msg__actions { display: flex; flex-wrap: wrap; gap: var(--sp-300); margin-top: var(--sp-400); text-align: left }
 .r-msg__actions .r-chip { white-space: normal; height: auto; min-height: 34px; padding-block: var(--sp-200); text-align: left }
 .r-msg__actions .r-chip--outline { background: var(--sp-bg-primary); border-color: var(--sp-border-hairline) }
 
-/* Typing: Rally ChatPhone dots, white 20px pill, 7px dots, 160ms stagger */
-.r-typing {
+/* Typing: three dots in an agent bubble */
+.r-msg__bubble.r-typing {
   display: flex;
   align-items: center;
-  gap: var(--sp-200);
-  padding: var(--sp-500) var(--sp-550);
-  border-radius: var(--r-radius-msg);
-  background: var(--sp-bg-primary);
+  gap: 5px;
+  padding: 15px 16px;
 }
 .r-typing__dot {
   width: 7px;
