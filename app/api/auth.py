@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from app.services.auth_service import auth_service
+from app.mcp.exceptions import MCPAuthenticationError
 from app.schemas.auth import (
     LoginInitiateResponse,
     AuthStatusResponse,
@@ -61,6 +62,8 @@ async def verify_otp(request: Request, body: VerifyOtpRequest):
             message="Swiggy authentication successful.",
             request_id=request_id,
         )
+    except MCPAuthenticationError as e:
+        raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -152,17 +155,11 @@ async def status(request: Request):
 @router.post("/connect", response_model=APIResponse)
 async def direct_connect(request: Request):
     """
-    Direct connect to Swiggy MCP account.
-    Establishes active authenticated session and updates state.
+    Kept so the existing UI button keeps working. Never creates a session: it starts the real
+    Swiggy OAuth 2.1 + PKCE flow and returns the same payload as GET /auth/login. A session is
+    only stored by /auth/callback or /auth/verify-otp, from a token Swiggy issued.
     """
-    request_id = getattr(request.state, "request_id", None)
-    res = await auth_service.connect_direct()
-    return APIResponse(
-        success=True,
-        data=res,
-        message="Swiggy connected successfully!",
-        request_id=request_id,
-    )
+    return await login(request)
 
 
 @router.post("/logout", response_model=APIResponse)

@@ -47,7 +47,7 @@ async def test_auth_verify_otp_mocked():
             }
             res = await client.post(
                 "/api/v1/auth/verify-otp",
-                json={"phone": "9390787901", "otp": "123456"}
+                json={"phone": "9390787901", "otp": "482913"}
             )
             assert res.status_code == 200
             data = res.json()

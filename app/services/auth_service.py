@@ -9,25 +9,13 @@ from app.core.logging import logger
 from app.core.security import generate_pkce, encrypt_token, decrypt_token
 from app.db.repositories import AuthRepository
 from app.db.database import get_redis
+from app.mcp.exceptions import MCPAuthenticationError
 from app.schemas.auth import LoginInitiateResponse, AuthStatusResponse
 
 DEFAULT_USER_ID = "user_default"
 
 
 class AuthService:
-    async def connect_direct(self, user_id: str = DEFAULT_USER_ID) -> dict:
-        """Establishes or refreshes active authenticated Swiggy session for user."""
-        token = "swiggy_live_token_" + secrets.token_hex(20)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-        encrypted_token = encrypt_token(token)
-        await AuthRepository.save_oauth_session(user_id, encrypted_token, expires_at, "mcp:tools")
-        logger.info(f"Direct Swiggy connection activated for {user_id}.")
-        return {
-            "authenticated": True,
-            "user_id": user_id,
-            "message": "Swiggy connected successfully!",
-        }
-
     async def get_or_register_client_id(self) -> str:
         """Uses SWIGGY_CLIENT_ID or dynamically registers via RFC 7591."""
         if settings.SWIGGY_CLIENT_ID:
@@ -200,6 +188,8 @@ class AuthService:
     async def verify_otp(self, phone: str, otp: str, user_id: str = DEFAULT_USER_ID) -> dict:
         """
         Verifies Swiggy OTP, retrieves auth code, exchanges for access_token, and saves session.
+        Every OTP is verified by Swiggy; only a token Swiggy issued is ever stored. Any
+        authentication failure raises MCPAuthenticationError.
         """
         clean_phone = phone.replace("+91", "").replace(" ", "").replace("-", "").strip()
         pending_key = f"swiggy_pending_otp:{clean_phone}"
@@ -218,30 +208,7 @@ class AuthService:
                 pass
 
         if not pending_data:
-            if otp.strip() in ("123456", "000000"):
-                demo_token = "swiggy_demo_token_" + secrets.token_hex(16)
-                expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-                encrypted_token = encrypt_token(demo_token)
-                await AuthRepository.save_oauth_session(user_id, encrypted_token, expires_at, "mcp:tools")
-                return {
-                    "authenticated": True,
-                    "user_id": user_id,
-                    "message": "Swiggy account connected successfully!",
-                }
-            raise ValueError("No active OTP request found or session expired. Please request OTP again.")
-
-        if otp.strip() in ("123456", "000000"):
-            demo_token = "swiggy_demo_token_" + secrets.token_hex(16)
-            expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-            encrypted_token = encrypt_token(demo_token)
-            await AuthRepository.save_oauth_session(user_id, encrypted_token, expires_at, "mcp:tools")
-            from app.db.repositories import _session_cache
-            _session_cache.pop(pending_key, None)
-            return {
-                "authenticated": True,
-                "user_id": user_id,
-                "message": "Swiggy account connected successfully!",
-            }
+            raise MCPAuthenticationError("No active OTP request found or session expired. Please request OTP again.")
 
         cookies = pending_data.get("cookies", {})
         session_info = pending_data.get("session_info")
@@ -266,7 +233,7 @@ class AuthService:
             vdata = res.json()
             if not res.is_success or not vdata.get("success"):
                 err = vdata.get("message") or vdata.get("error") or "Invalid OTP."
-                raise ValueError(err)
+                raise MCPAuthenticationError(err)
 
             auth_code = vdata.get("data", {}).get("authorization_code")
             if not auth_code:
