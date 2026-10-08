@@ -186,44 +186,92 @@
 .r-chat__welcome-title { font: 700 var(--sp-heading-md-size)/var(--sp-heading-md-lh) var(--sp-font-secondary); letter-spacing: -.015em; text-wrap: balance }
 .r-chat__welcome-text { max-width: 280px; font: 400 var(--sp-para-md-size)/var(--sp-para-md-lh) var(--sp-font-primary); color: var(--sp-content-secondary) }
 
+/* Rally AI thread (rally-ai.jsx renderTurn, variant C): the user's line is quiet
+   right-aligned text with no container; the answer is a white 20px card.
+   Turns are 10px apart. The thread sits inside the page gutter. */
 .r-chat__thread {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-400);
-  margin-inline: calc(var(--r-gutter) * -1);
-  padding: var(--sp-600) var(--sp-500) calc(var(--r-composer-height) + var(--sp-900));
+  gap: var(--sp-500);
+  width: 100%;
+  max-width: var(--r-chat-max);
+  margin-inline: auto;
+  padding: var(--sp-500) 0 var(--r-chat-clearance);
 }
 .r-chat__thread:empty { padding-block: 0 }
 
-.r-msg { display: flex; justify-content: flex-start; animation: r-msg-in 300ms var(--sp-ease-elegant) both }
+.r-msg { display: flex; justify-content: flex-start; min-width: 0; animation: r-msg-in 380ms var(--sp-ease-elegant) both }
 .r-msg--user { justify-content: flex-end }
 .r-msg__bubble {
-  max-width: min(84%, 520px);
-  padding: 9px 13px;
-  border-radius: 20px;
-  background: var(--sp-bg-primary);
-  color: var(--sp-content-primary);
+  min-width: 0;
+  max-width: 100%;
   font: 400 15px/1.4 var(--sp-font-primary);
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
-.r-msg--user .r-msg__bubble { background: var(--sp-content-primary); color: var(--sp-content-inverted-primary) }
+.r-msg--agent .r-msg__bubble {
+  width: 100%;
+  padding: var(--sp-600);
+  border-radius: var(--r-radius-msg);
+  background: var(--sp-bg-primary);
+  color: var(--sp-content-primary);
+}
+.r-msg--user .r-msg__bubble {
+  max-width: 80%;
+  padding: 0 var(--sp-200);
+  background: none;
+  color: var(--sp-ink-sec);
+  text-align: right;
+}
 .r-msg__bubble strong { font-weight: 700 }
 .r-msg__bubble em { font-style: normal; font-weight: 500 }
-.r-msg--agent .r-msg__bubble a { color: var(--sp-content-accent) }
-.r-msg__actions { display: flex; flex-wrap: wrap; gap: var(--sp-300); margin-top: var(--sp-400) }
+.r-msg--agent .r-msg__bubble a { color: var(--sp-content-accent); text-decoration: underline; text-underline-offset: 2px }
+.r-msg__bubble img,
+.r-msg__bubble svg,
+.r-msg__bubble video,
+.r-msg__bubble canvas { max-width: 100%; height: auto }
+.r-msg__bubble pre,
+.r-msg__bubble code {
+  font: 500 var(--sp-mono-md-size)/var(--sp-mono-md-lh) var(--sp-font-mono);
+  background: var(--sp-bg-quiet);
+  border-radius: var(--sp-r-input);
+}
+.r-msg__bubble code { padding: 1px var(--sp-300) }
+.r-msg__bubble pre { margin: var(--sp-500) 0 0; padding: var(--sp-500) var(--sp-600); overflow-x: auto; white-space: pre }
+.r-msg__bubble pre code { padding: 0; background: none }
 
+/* Inline cards, QR and lists inside an answer: Rally's inner box, quiet surface, no shadow */
+.r-msg__bubble > .r-card,
+.r-msg__bubble > .r-pay__qr,
+.r-msg__bubble > .r-list {
+  margin-top: var(--sp-500);
+  border-radius: var(--sp-r-tile);
+  background: var(--sp-bg-quiet);
+  box-shadow: none;
+}
+.r-msg__bubble > .r-card { padding: var(--sp-500) var(--sp-600) }
+.r-msg__bubble > .r-pay__qr { max-width: 100% }
+.r-msg__bubble > .r-pay__qr .r-pay__qr-img { width: min(220px, 100%) }
+.r-msg__bubble > .r-card .r-card__title { font-size: var(--sp-label-lg-size); line-height: var(--sp-label-lg-lh) }
+
+.r-msg__actions { display: flex; flex-wrap: wrap; gap: var(--sp-300); margin-top: var(--sp-500); text-align: left }
+.r-msg__actions .r-chip { white-space: normal; height: auto; min-height: 34px; padding-block: var(--sp-200); text-align: left }
+.r-msg__actions .r-chip--outline { background: var(--sp-bg-primary); border-color: var(--sp-border-hairline) }
+
+/* Typing: Rally ChatPhone dots, white 20px pill, 7px dots, 160ms stagger */
 .r-typing {
   display: flex;
+  align-items: center;
   gap: var(--sp-200);
-  padding: var(--sp-500) 14px;
-  border-radius: 20px;
+  padding: var(--sp-500) var(--sp-550);
+  border-radius: var(--r-radius-msg);
   background: var(--sp-bg-primary);
 }
 .r-typing__dot {
   width: 7px;
   height: 7px;
   border-radius: var(--sp-r-avatar);
-  background: var(--sp-content-tertiary);
+  background: var(--sp-content-secondary);
   animation: r-typing-dot 1.2s infinite;
 }
 .r-typing__dot:nth-child(2) { animation-delay: 160ms }
@@ -241,7 +289,7 @@
   padding: var(--sp-500) calc(var(--r-gutter) + var(--r-safe-right)) var(--sp-400) calc(var(--r-gutter) + var(--r-safe-left));
   background: var(--sp-bg-canvas);
 }
-.r-composer__inner { display: flex; flex-direction: column; gap: var(--sp-500); max-width: var(--r-page-max); margin-inline: auto }
+.r-composer__inner { display: flex; flex-direction: column; gap: var(--sp-500); max-width: var(--r-chat-max); margin-inline: auto }
 .r-composer__suggestions { margin-inline: calc(var(--r-gutter) * -1) }
 .r-composer__status { font: 400 var(--sp-para-sm-size)/var(--sp-para-sm-lh) var(--sp-font-primary); color: var(--sp-content-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .r-composer__status:empty { display: none }
@@ -270,7 +318,7 @@
   color: var(--sp-content-primary);
   font-size: 16px;
 }
-.r-composer__input::placeholder { color: var(--sp-content-tertiary) }
+.r-composer__input::placeholder { color: var(--sp-gray-600) }
 
 .r-composer__wave { display: none; align-items: center; gap: var(--sp-400); font: 400 15px/20px var(--sp-font-primary); color: var(--sp-meta-alt); white-space: nowrap }
 .r-composer__wave-bar { width: 3px; height: 18px; margin-right: 1px; border-radius: 2px; background: var(--sp-content-primary); animation: r-wave-bar 900ms ease-in-out infinite }
@@ -494,7 +542,7 @@
   .r-grid--tiles { grid-template-columns: repeat(3, minmax(0, 1fr)) }
   .r-map { aspect-ratio: 4 / 3; margin-inline: 0 }
   .r-pay__qr { max-width: 250px }
-  .r-chat__thread { margin-inline: 0 }
+  .r-composer__suggestions { margin-inline: 0; padding-inline: 0 }
 }
 
 /* ---------------------------------------------------------------------------

@@ -319,6 +319,14 @@
      pad = 112 (all rally-ai.jsx numbers). The chat thread pads its bottom by
      composer-bottom + this so the last message is never covered. */
   --r-composer-height:112px;
+  /* chat column (DERIVED): readable measure, ~75 characters at 15px. Rally has no
+     web layout; its phone frame is 412px, the column widens to 640 from 768. */
+  --r-chat-max:640px;
+  /* thread bottom clearance: composer-bottom + composer-height + status line (18)
+     + its gap (12) + breathing room (26) = 56. composer-height itself excludes
+     the status line, which Rally does not have. */
+  --r-chat-clearance:calc(var(--r-composer-bottom) + var(--r-composer-height) + var(--sp-1200));
+  --r-radius-msg:20px;         /* rally-ai.jsx aiCard / ChatPhone bubble radius */
 
   /* --- z-index scale ----------------------------------------------------------
    * Every number is one Rally already uses:
