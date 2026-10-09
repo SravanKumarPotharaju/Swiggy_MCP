@@ -281,13 +281,13 @@ CURATED_MENU_CATEGORIES = [
 
 
 class RestaurantService:
-    async def _resolve_address_id(self, address_id: Optional[str]) -> str:
+    async def _resolve_address_id(self, address_id: Optional[str] = None, user_id: str = "user_default") -> str:
         """If address_id is not provided, fetch default saved address or return default."""
         if address_id:
             return address_id
 
         try:
-            res = await mcp_client.call_tool("get_addresses", {})
+            res = await mcp_client.call_tool("get_addresses", {}, user_id=user_id)
             structured = res.get("structuredContent", {})
             default_id = structured.get("resolution", {}).get("defaultAddressId")
             if default_id:
@@ -299,7 +299,7 @@ class RestaurantService:
             pass
 
         from app.db.repositories import AddressRepository
-        active = await AddressRepository.get_active_address("user_default")
+        active = await AddressRepository.get_active_address(user_id)
         return active.get("id", "addr_home_1") if active else "addr_home_1"
 
     async def search_restaurants(

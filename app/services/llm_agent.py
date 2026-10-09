@@ -274,6 +274,7 @@ def get_addresses_tool() -> Dict[str, Any]:
 
 
 _current_updated_address: Optional[Dict[str, Any]] = None
+_current_active_user_id: str = "user_default"
 
 
 def select_delivery_address_tool(query_or_tag: str) -> Dict[str, Any]:
@@ -281,12 +282,12 @@ def select_delivery_address_tool(query_or_tag: str) -> Dict[str, Any]:
     Select or switch the user's active delivery address from their saved Swiggy addresses.
     Use this when user says "change address to Work", "deliver to my hostel", "update address to Kondapur", "deliver to Home", etc.
     """
-    global _current_updated_address
+    global _current_updated_address, _current_active_user_id
     logger.info(f"[Agent Tool] select_delivery_address query_or_tag='{query_or_tag}'")
     try:
         from app.mcp.client import mcp_client
         from app.db.repositories import AddressRepository
-        res = run_async_safe(mcp_client.call_tool("get_addresses", {}))
+        res = run_async_safe(mcp_client.call_tool("get_addresses", {}, user_id=_current_active_user_id))
         structured = res.get("structuredContent", {})
         raw_addresses = structured.get("addresses", [])
 
@@ -310,7 +311,7 @@ def select_delivery_address_tool(query_or_tag: str) -> Dict[str, Any]:
 
         if matched:
             _current_updated_address = matched
-            run_async_safe(AddressRepository.set_active_address("user_default", matched))
+            run_async_safe(AddressRepository.set_active_address(_current_active_user_id, matched))
             return {
                 "status": "ADDRESS_SELECTED",
                 "address_id": matched.get("id"),
@@ -368,7 +369,7 @@ def update_delivery_address_tool(
             "postalCode": postal_code,
         }
         _current_updated_address = new_addr_obj
-        run_async_safe(AddressRepository.set_active_address("user_default", new_addr_obj))
+        run_async_safe(AddressRepository.set_active_address(_current_active_user_id, new_addr_obj))
         return {
             "status": "ADDRESS_UPDATED",
             "address": new_addr_obj,
@@ -384,7 +385,7 @@ def update_delivery_address_tool(
         }
         _current_updated_address = new_addr_obj
         from app.db.repositories import AddressRepository
-        run_async_safe(AddressRepository.set_active_address("user_default", new_addr_obj))
+        run_async_safe(AddressRepository.set_active_address(_current_active_user_id, new_addr_obj))
         return {
             "status": "ADDRESS_UPDATED",
             "address": new_addr_obj,
@@ -703,9 +704,10 @@ class LLMAgent:
         if not self.client:
             return {"reply": "⚠️ Gemini API key is not configured. Please set GEMINI_API_KEY in .env.", "order": None, "updated_address": None}
 
-        global _current_updated_address, _current_ui_action
+        global _current_updated_address, _current_ui_action, _current_active_user_id
         _current_updated_address = None
         _current_ui_action = None
+        _current_active_user_id = user_phone or "user_default"
 
         if text_message:
             clean_txt = re.sub(r'[^a-zA-Z0-9\s]', ' ', text_message).strip().upper()
@@ -772,7 +774,7 @@ class LLMAgent:
                 food_total = 0
                 im_total = 0
                 try:
-                    f_sum = await cart_service.get_cart_summary()
+                    f_sum = await cart_service.get_cart_summary(user_id=_current_active_user_id)
                     if f_sum and f_sum.items:
                         food_has_items = True
                         food_total = f_sum.pricing.to_pay if f_sum.pricing else 0
@@ -781,7 +783,7 @@ class LLMAgent:
 
                 try:
                     from app.services.instamart_service import instamart_service
-                    im_cart = await instamart_service.get_cart(user_id="user_default")
+                    im_cart = await instamart_service.get_cart(user_id=_current_active_user_id)
                     if im_cart and im_cart.items:
                         im_has_items = True
                         im_total = im_cart.total_amount
@@ -913,7 +915,7 @@ class LLMAgent:
             if re.search(r'\b(CLEAR|EMPTY)\s*(THE\s*)?(INSTAMART|GROCERY|GROCERIES)\s*CART\b', clean_txt):
                 try:
                     from app.services.instamart_service import instamart_service
-                    await instamart_service.clear_cart(user_id="user_default")
+                    await instamart_service.clear_cart(user_id=user_phone)
                 except Exception:
                     pass
                 return {
@@ -944,8 +946,8 @@ class LLMAgent:
                 if not is_instamart and "FOOD" not in clean_txt:
                     try:
                         from app.services.instamart_service import instamart_service
-                        im_cart = await instamart_service.get_cart(user_id="user_default")
-                        f_cart = await cart_service.get_cart()
+                        im_cart = await instamart_service.get_cart(user_id=user_phone)
+                        f_cart = await cart_service.get_cart(user_id=user_phone)
                         if (not f_cart.items or f_cart.item_count == 0) and (im_cart.items and im_cart.total_items > 0):
                             is_instamart = True
                     except Exception:
@@ -956,7 +958,7 @@ class LLMAgent:
                         from app.services.instamart_service import instamart_service
                         from app.schemas.instamart import InstamartCheckoutRequest
                         im_req = InstamartCheckoutRequest(payment_method="UPI", user_confirmed=True)
-                        im_res = await instamart_service.checkout(request=im_req, user_id="user_default")
+                        im_res = await instamart_service.checkout(request=im_req, user_id=user_phone)
 
                         if im_res.order_id:
                             reply_msg = (

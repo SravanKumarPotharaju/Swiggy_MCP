@@ -13,6 +13,7 @@ from app.schemas.cart import (
 )
 
 
+_local_food_carts: Dict[str, Dict[str, Any]] = {}
 _local_food_cart: Dict[str, Any] = {
     "restaurant_id": "288893",
     "restaurant_name": "Meghana Foods",
@@ -21,13 +22,23 @@ _local_food_cart: Dict[str, Any] = {
 
 
 class CartService:
-    async def _resolve_address_id(self, address_id: Optional[str]) -> str:
-        """If address_id is not provided, fetch default saved address or return default."""
+    def _get_user_cart(self, user_id: str) -> Dict[str, Any]:
+        """Gets or initializes in-memory cart map for a user."""
+        if user_id not in _local_food_carts:
+            _local_food_carts[user_id] = {
+                "restaurant_id": "288893",
+                "restaurant_name": "Meghana Foods",
+                "items": {},
+            }
+        return _local_food_carts[user_id]
+
+    async def _resolve_address_id(self, address_id: Optional[str] = None, user_id: str = "user_default") -> str:
+        """If address_id is not provided, fetch default saved address or return default for user."""
         if address_id:
             return address_id
 
         try:
-            res = await mcp_client.call_tool("get_addresses", {})
+            res = await mcp_client.call_tool("get_addresses", {}, user_id=user_id)
             structured = res.get("structuredContent", {})
             default_id = structured.get("resolution", {}).get("defaultAddressId")
             if default_id:
@@ -39,7 +50,7 @@ class CartService:
             pass
 
         from app.db.repositories import AddressRepository
-        active = await AddressRepository.get_active_address("user_default")
+        active = await AddressRepository.get_active_address(user_id)
         return active.get("id", "addr_home_1") if active else "addr_home_1"
 
     def _parse_cart_payload(
@@ -107,11 +118,12 @@ class CartService:
             address_id=address_id,
         )
 
-    def _get_local_cart_response(self, address_id: str) -> CartResponse:
-        """Constructs CartResponse from local persistent store."""
+    def _get_local_cart_response(self, address_id: str, user_id: str = "user_default") -> CartResponse:
+        """Constructs CartResponse from local persistent store for specific user."""
         from app.db.repositories import _food_cart_cache
-        saved_cart = _food_cart_cache.get("user_default")
-        cart_to_use = saved_cart if saved_cart else _local_food_cart
+        saved_cart = _food_cart_cache.get(user_id)
+        user_cart = self._get_user_cart(user_id)
+        cart_to_use = saved_cart if (saved_cart and saved_cart.get("items")) else user_cart
         items_dict = cart_to_use.get("items", {})
         parsed_items: List[CartItemResponse] = []
         item_total = 0.0
@@ -158,7 +170,7 @@ class CartService:
         )
 
         return CartResponse(
-            cart_id="cart_local_food",
+            cart_id=f"cart_{user_id}_food",
             restaurant_id=cart_to_use.get("restaurant_id", "288893"),
             restaurant_name=cart_to_use.get("restaurant_name", "Meghana Foods"),
             item_count=sum(i.quantity for i in parsed_items),
@@ -168,20 +180,31 @@ class CartService:
             address_id=address_id,
         )
 
-    async def get_cart(self, address_id: Optional[str] = None) -> CartResponse:
-        """Fetches the food cart with persistent fallback."""
-        resolved_address_id = await self._resolve_address_id(address_id)
-        global _local_food_cart
+    async def get_cart(self, address_id: Optional[str] = None, user_id: str = "user_default") -> CartResponse:
+        """Fetches the food cart for the specific user."""
+        resolved_address_id = await self._resolve_address_id(address_id, user_id=user_id)
         from app.db.repositories import CartRepository
-        saved_food = await CartRepository.get_food_cart("user_default")
+        saved_food = await CartRepository.get_food_cart(user_id)
+        user_cart = self._get_user_cart(user_id)
         if saved_food and saved_food.get("items"):
-            _local_food_cart = saved_food
+            _local_food_carts[user_id] = saved_food
+            user_cart = saved_food
 
-        fb_rid = (saved_food and saved_food.get("restaurant_id")) or _local_food_cart.get("restaurant_id", "288893")
-        fb_rname = (saved_food and saved_food.get("restaurant_name")) or _local_food_cart.get("restaurant_name", "Meghana Foods")
+        # If user has no saved items, return clean empty cart!
+        if not user_cart.get("items") and (not saved_food or not saved_food.get("items")):
+            return CartResponse(
+                is_empty=True,
+                item_count=0,
+                items=[],
+                pricing=None,
+                address_id=resolved_address_id,
+            )
+
+        fb_rid = user_cart.get("restaurant_id", "288893")
+        fb_rname = user_cart.get("restaurant_name", "Meghana Foods")
 
         try:
-            res = await mcp_client.call_tool("get_food_cart", {"addressId": resolved_address_id})
+            res = await mcp_client.call_tool("get_food_cart", {"addressId": resolved_address_id}, user_id=user_id)
             structured = res.get("structuredContent", {})
             cart_resp = self._parse_cart_payload(
                 structured,
@@ -191,15 +214,13 @@ class CartService:
             )
             if not cart_resp.is_empty:
                 return cart_resp
-            if saved_food and saved_food.get("items"):
-                return self._get_local_cart_response(resolved_address_id)
-            return cart_resp
+            return self._get_local_cart_response(resolved_address_id, user_id=user_id)
         except Exception:
-            return self._get_local_cart_response(resolved_address_id)
+            return self._get_local_cart_response(resolved_address_id, user_id=user_id)
 
-    async def update_cart(self, request: UpdateCartRequest) -> CartResponse:
+    async def update_cart(self, request: UpdateCartRequest, user_id: str = "user_default") -> CartResponse:
         """Adds, updates, or removes items in the Swiggy Food cart with persistent multi-tier fallback."""
-        resolved_address_id = await self._resolve_address_id(request.address_id)
+        resolved_address_id = await self._resolve_address_id(request.address_id, user_id=user_id)
 
         cart_items_payload = []
         for it in request.items:
@@ -222,25 +243,26 @@ class CartService:
             for dish in cat["items"]:
                 dish_catalog[str(dish["id"])] = dish
 
-        global _local_food_cart
         from app.db.repositories import CartRepository
-        saved_food = await CartRepository.get_food_cart("user_default")
-        if saved_food and saved_food.get("items") and not _local_food_cart.get("items"):
-            _local_food_cart = saved_food
+        saved_food = await CartRepository.get_food_cart(user_id)
+        user_cart = self._get_user_cart(user_id)
+        if saved_food and saved_food.get("items") and not user_cart.get("items"):
+            _local_food_carts[user_id] = saved_food
+            user_cart = saved_food
 
-        _local_food_cart["restaurant_id"] = request.restaurant_id or "288893"
-        _local_food_cart["restaurant_name"] = request.restaurant_name or "Meghana Foods"
+        user_cart["restaurant_id"] = request.restaurant_id or "288893"
+        user_cart["restaurant_name"] = request.restaurant_name or "Meghana Foods"
         for it in request.items:
             mid = str(it.menu_item_id)
             if it.quantity <= 0:
-                _local_food_cart["items"].pop(mid, None)
+                user_cart["items"].pop(mid, None)
             else:
                 dish_info = dish_catalog.get(mid, {
                     "name": f"Dish #{mid}",
                     "price": 345.0,
                     "isVeg": False,
                 })
-                _local_food_cart["items"][mid] = {
+                user_cart["items"][mid] = {
                     "name": dish_info.get("name", f"Dish #{mid}"),
                     "price": dish_info.get("price", 345.0),
                     "quantity": it.quantity,
@@ -249,7 +271,10 @@ class CartService:
                 }
 
         from app.db.repositories import CartRepository
-        await CartRepository.save_food_cart("user_default", _local_food_cart)
+        await CartRepository.save_food_cart(user_id, user_cart)
+        if user_id == "user_default":
+            global _local_food_cart
+            _local_food_cart = user_cart
 
         try:
             tool_args: Dict[str, Any] = {
@@ -262,8 +287,8 @@ class CartService:
             if request.cutlery_opt_in is not None:
                 tool_args["cutleryOptIn"] = request.cutlery_opt_in
 
-            logger.info(f"Updating food cart with {len(cart_items_payload)} item(s) for restaurant {request.restaurant_id}")
-            res = await mcp_client.call_tool("update_food_cart", tool_args)
+            logger.info(f"Updating food cart for {user_id} with {len(cart_items_payload)} item(s) for restaurant {request.restaurant_id}")
+            res = await mcp_client.call_tool("update_food_cart", tool_args, user_id=user_id)
             structured = res.get("structuredContent", {})
             return self._parse_cart_payload(
                 structured,
@@ -273,16 +298,20 @@ class CartService:
             )
         except Exception as e:
             logger.info(f"Swiggy MCP cart update notice ({e}). Using persistent local cart state.")
-            return self._get_local_cart_response(resolved_address_id)
+            return self._get_local_cart_response(resolved_address_id, user_id=user_id)
 
-    async def flush_cart(self) -> bool:
-        """Clears/flushes the entire food cart."""
-        logger.info("Flushing food cart")
-        _local_food_cart["items"] = {}
+    async def flush_cart(self, user_id: str = "user_default") -> bool:
+        """Clears/flushes the entire food cart for the specific user."""
+        logger.info(f"Flushing food cart for {user_id}")
+        user_cart = self._get_user_cart(user_id)
+        user_cart["items"] = {}
+        if user_id == "user_default":
+            global _local_food_cart
+            _local_food_cart["items"] = {}
         from app.db.repositories import CartRepository
-        await CartRepository.clear_food_cart("user_default")
+        await CartRepository.clear_food_cart(user_id)
         try:
-            await mcp_client.call_tool("flush_food_cart", {})
+            await mcp_client.call_tool("flush_food_cart", {}, user_id=user_id)
         except Exception:
             pass
         return True
@@ -361,18 +390,18 @@ class CartService:
             cart=updated_cart,
         )
 
-    async def get_cart_summary(self, address_id: Optional[str] = None) -> CartSummaryResponse:
+    async def get_cart_summary(self, address_id: Optional[str] = None, user_id: str = "user_default") -> CartSummaryResponse:
         """
         Fetches an order preview / cart summary for explicit user confirmation
         before proceeding to payment/checkout.
         """
-        resolved_address_id = await self._resolve_address_id(address_id)
-        cart = await self.get_cart(address_id=resolved_address_id)
+        resolved_address_id = await self._resolve_address_id(address_id, user_id=user_id)
+        cart = await self.get_cart(address_id=resolved_address_id, user_id=user_id)
 
         # Fetch address metadata for confirmation
         address_info = None
         try:
-            addr_res = await mcp_client.call_tool("get_addresses", {})
+            addr_res = await mcp_client.call_tool("get_addresses", {}, user_id=user_id)
             for a in addr_res.get("structuredContent", {}).get("addresses", []):
                 aid = str(a.get("id", ""))
                 if aid == resolved_address_id or aid.startswith(resolved_address_id) or resolved_address_id.startswith(aid):

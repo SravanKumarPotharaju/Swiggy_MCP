@@ -22,28 +22,45 @@ DEFAULT_ACTIVE_ADDRESS = {
 
 class AuthRepository:
     @staticmethod
-    async def save_pkce_state(state: str, code_verifier: str, ttl_seconds: int = 180):
-        """Stores OAuth state -> code_verifier in Redis with TTL."""
+    async def save_pkce_state(state: str, code_verifier: str, ttl_seconds: int = 180, user_id: str = "user_default"):
+        """Stores OAuth state -> code_verifier & user_id in Redis with TTL."""
+        val = json.dumps({"code_verifier": code_verifier, "user_id": user_id})
         try:
             redis = get_redis()
-            await redis.set(f"oauth:state:{state}", code_verifier, ex=ttl_seconds)
+            await redis.set(f"oauth:state:{state}", val, ex=ttl_seconds)
         except Exception as e:
             logger.warning(f"Failed to store PKCE state in Redis: {e}")
-            _session_cache[f"pkce:{state}"] = code_verifier
+            _session_cache[f"pkce:{state}"] = {"code_verifier": code_verifier, "user_id": user_id}
 
     @staticmethod
-    async def get_and_delete_pkce_state(state: str) -> Optional[str]:
-        """Retrieves and immediately removes code_verifier for one-time use."""
+    async def get_and_delete_pkce_state(state: str) -> Optional[Dict[str, str]]:
+        """Retrieves and immediately removes code_verifier and user_id for one-time use."""
+        data_str = None
         try:
             redis = get_redis()
             key = f"oauth:state:{state}"
-            verifier = await redis.get(key)
-            if verifier:
+            raw = await redis.get(key)
+            if raw:
                 await redis.delete(key)
-                return verifier
+                data_str = raw
         except Exception:
             pass
-        return _session_cache.pop(f"pkce:{state}", None)
+
+        if not data_str:
+            cached = _session_cache.pop(f"pkce:{state}", None)
+            if isinstance(cached, dict):
+                return cached
+            if isinstance(cached, str):
+                return {"code_verifier": cached, "user_id": "user_default"}
+            return None
+
+        try:
+            parsed = json.loads(data_str)
+            if isinstance(parsed, dict):
+                return parsed
+            return {"code_verifier": str(parsed), "user_id": "user_default"}
+        except Exception:
+            return {"code_verifier": data_str, "user_id": "user_default"}
 
     @staticmethod
     async def save_oauth_session(user_id: str, encrypted_token: str, expires_at: datetime, scope: str):

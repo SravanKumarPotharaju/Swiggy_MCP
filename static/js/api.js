@@ -1,28 +1,67 @@
-// SmartFlow API Client
+// SmartFlow API Client with User Session Isolation
 const API_BASE = '/api/v1';
 
+function getAppUserId() {
+  let uid = localStorage.getItem('smartflow_user_id');
+  if (!uid) {
+    uid = 'user_' + (window.crypto && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 16) : Math.random().toString(36).substring(2, 14));
+    localStorage.setItem('smartflow_user_id', uid);
+  }
+  return uid;
+}
+
+async function appFetch(url, options = {}) {
+  const headers = Object.assign(
+    {
+      'X-User-ID': getAppUserId(),
+    },
+    options.headers || {}
+  );
+  return fetch(url, { ...options, headers });
+}
+
 const api = {
+  getUserId() {
+    return getAppUserId();
+  },
+
+  setUserId(userId) {
+    if (userId) {
+      localStorage.setItem('smartflow_user_id', userId);
+    }
+  },
+
+  bindUserAccount(phone) {
+    if (!phone) return getAppUserId();
+    const clean = String(phone).replace(/\D/g, '').slice(-10);
+    const newUid = 'user_' + clean;
+    localStorage.setItem('smartflow_user_id', newUid);
+    localStorage.setItem('smartflow_user_phone', clean);
+    return newUid;
+  },
+
   async getInitialState() {
-    const res = await fetch(`${API_BASE}/agent/initial-state`);
+    const res = await appFetch(`${API_BASE}/agent/initial-state`);
     return await res.json();
   },
 
-  async sendChatMessage(message, userPhone = 'user_web') {
-    const res = await fetch(`${API_BASE}/agent/chat`, {
+  async sendChatMessage(message, userPhone = null) {
+    const phone = userPhone || getAppUserId();
+    const res = await appFetch(`${API_BASE}/agent/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, user_phone: userPhone }),
+      body: JSON.stringify({ message, user_phone: phone }),
     });
     return await res.json();
   },
 
   async getCart() {
-    const res = await fetch(`${API_BASE}/cart`);
+    const res = await appFetch(`${API_BASE}/cart`);
     return await res.json();
   },
 
   async updateCart(items, restaurantId = '288893', restaurantName = 'Meghana Foods') {
-    const res = await fetch(`${API_BASE}/cart`, {
+    const res = await appFetch(`${API_BASE}/cart`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -35,22 +74,22 @@ const api = {
   },
 
   async clearCart() {
-    const res = await fetch(`${API_BASE}/cart`, { method: 'DELETE' });
+    const res = await appFetch(`${API_BASE}/cart`, { method: 'DELETE' });
     return await res.json();
   },
 
   async getCartSummary() {
-    const res = await fetch(`${API_BASE}/cart/summary`);
+    const res = await appFetch(`${API_BASE}/cart/summary`);
     return await res.json();
   },
 
   async getPaymentOptions() {
-    const res = await fetch(`${API_BASE}/payments/options`);
+    const res = await appFetch(`${API_BASE}/payments/options`);
     return await res.json();
   },
 
   async checkout(paymentMethod = 'UPI', generateUPIQR = true, note = '') {
-    const res = await fetch(`${API_BASE}/orders/checkout`, {
+    const res = await appFetch(`${API_BASE}/orders/checkout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -63,35 +102,35 @@ const api = {
   },
 
   async checkPaymentStatus(paasId, orderId) {
-    const res = await fetch(`${API_BASE}/payments/${paasId}/status?order_id=${orderId || ''}`);
+    const res = await appFetch(`${API_BASE}/payments/${paasId}/status?order_id=${orderId || ''}`);
     return await res.json();
   },
 
   async confirmOrder(orderId) {
-    const res = await fetch(`${API_BASE}/orders/${orderId}/confirm`, {
+    const res = await appFetch(`${API_BASE}/orders/${orderId}/confirm`, {
       method: 'POST',
     });
     return await res.json();
   },
 
   async getOrders(count = 5) {
-    const res = await fetch(`${API_BASE}/orders?count=${count}`);
+    const res = await appFetch(`${API_BASE}/orders?count=${count}`);
     return await res.json();
   },
 
   async getFrequentOrders() {
-    const res = await fetch(`${API_BASE}/orders/frequent`);
+    const res = await appFetch(`${API_BASE}/orders/frequent`);
     return await res.json();
   },
 
   async trackOrder(orderId = '') {
     const url = orderId ? `${API_BASE}/orders/${orderId}/track` : `${API_BASE}/orders/249475187182313/track`;
-    const res = await fetch(url);
+    const res = await appFetch(url);
     return await res.json();
   },
 
   async triggerAutomatedCall(phoneNumber = null, message = null) {
-    const res = await fetch(`${API_BASE}/agent/call-user`, {
+    const res = await appFetch(`${API_BASE}/agent/call-user`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone_number: phoneNumber, message }),
@@ -100,7 +139,7 @@ const api = {
   },
 
   async setActiveAddress(address) {
-    const res = await fetch(`${API_BASE}/agent/address`, {
+    const res = await appFetch(`${API_BASE}/agent/address`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address }),
@@ -112,24 +151,24 @@ const api = {
   async searchInstamartProducts(query, addressId = null, limit = 8) {
     let url = `${API_BASE}/instamart/products?query=${encodeURIComponent(query)}&limit=${limit}`;
     if (addressId) url += `&address_id=${encodeURIComponent(addressId)}`;
-    const res = await fetch(url);
+    const res = await appFetch(url);
     return await res.json();
   },
 
   async getInstamartGoToItems(addressId = null) {
     let url = `${API_BASE}/instamart/go-to-items`;
-    if (addressId) url += `?address_id=${encodeURIComponent(addressId)}`;
-    const res = await fetch(url);
+    if (addressId) url += `&address_id=${encodeURIComponent(addressId)}`;
+    const res = await appFetch(url);
     return await res.json();
   },
 
   async getInstamartCart() {
-    const res = await fetch(`${API_BASE}/instamart/cart`);
+    const res = await appFetch(`${API_BASE}/instamart/cart`);
     return await res.json();
   },
 
   async updateInstamartCart(items, addressId = null) {
-    const res = await fetch(`${API_BASE}/instamart/cart`, {
+    const res = await appFetch(`${API_BASE}/instamart/cart`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, address_id: addressId }),
@@ -138,7 +177,7 @@ const api = {
   },
 
   async addOrUpdateInstamartItem(spinId, quantityDelta = null, quantity = null) {
-    const res = await fetch(`${API_BASE}/instamart/cart/item`, {
+    const res = await appFetch(`${API_BASE}/instamart/cart/item`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ spinId, quantity_delta: quantityDelta, quantity }),
@@ -147,12 +186,12 @@ const api = {
   },
 
   async clearInstamartCart() {
-    const res = await fetch(`${API_BASE}/instamart/cart`, { method: 'DELETE' });
+    const res = await appFetch(`${API_BASE}/instamart/cart`, { method: 'DELETE' });
     return await res.json();
   },
 
   async checkoutInstamart(paymentMethod = 'UPI', userConfirmed = true) {
-    const res = await fetch(`${API_BASE}/instamart/checkout`, {
+    const res = await appFetch(`${API_BASE}/instamart/checkout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -164,29 +203,29 @@ const api = {
   },
 
   async confirmInstamartOrder(orderId) {
-    const res = await fetch(`${API_BASE}/instamart/orders/${orderId}/confirm`, {
+    const res = await appFetch(`${API_BASE}/instamart/orders/${orderId}/confirm`, {
       method: 'POST',
     });
     return await res.json();
   },
 
   async trackInstamartOrder(orderId) {
-    const res = await fetch(`${API_BASE}/instamart/orders/${orderId}/track`);
+    const res = await appFetch(`${API_BASE}/instamart/orders/${orderId}/track`);
     return await res.json();
   },
 
   async getAuthStatus() {
-    const res = await fetch(`${API_BASE}/auth/status`);
+    const res = await appFetch(`${API_BASE}/auth/status`);
     return await res.json();
   },
 
   async loginSwiggy() {
-    const res = await fetch(`${API_BASE}/auth/login`);
+    const res = await appFetch(`${API_BASE}/auth/login`);
     return await res.json();
   },
 
   async sendSwiggyOtp(phone, countryCode = "+91") {
-    const res = await fetch(`${API_BASE}/auth/send-otp`, {
+    const res = await appFetch(`${API_BASE}/auth/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, country_code: countryCode })
@@ -195,7 +234,7 @@ const api = {
   },
 
   async verifySwiggyOtp(phone, otp) {
-    const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+    const res = await appFetch(`${API_BASE}/auth/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, otp })
@@ -204,7 +243,7 @@ const api = {
   },
 
   async directConnectSwiggy() {
-    const res = await fetch(`${API_BASE}/auth/connect`, {
+    const res = await appFetch(`${API_BASE}/auth/connect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -212,7 +251,7 @@ const api = {
   },
 
   async logoutSwiggy() {
-    const res = await fetch(`${API_BASE}/auth/logout`, {
+    const res = await appFetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });

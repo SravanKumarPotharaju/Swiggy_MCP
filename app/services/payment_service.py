@@ -9,26 +9,31 @@ from app.schemas.payment import (
 
 
 class PaymentService:
-    async def _resolve_address_id(self, address_id: Optional[str]) -> str:
+    async def _resolve_address_id(self, address_id: Optional[str] = None, user_id: str = "user_default") -> str:
         if address_id:
             return address_id
 
-        res = await mcp_client.call_tool("get_addresses", {})
-        structured = res.get("structuredContent", {})
-        default_id = structured.get("resolution", {}).get("defaultAddressId")
-        if default_id:
-            return default_id
+        try:
+            res = await mcp_client.call_tool("get_addresses", {}, user_id=user_id)
+            structured = res.get("structuredContent", {})
+            default_id = structured.get("resolution", {}).get("defaultAddressId")
+            if default_id:
+                return default_id
 
-        addresses = structured.get("addresses", [])
-        if addresses:
-            return addresses[0].get("id")
+            addresses = structured.get("addresses", [])
+            if addresses:
+                return addresses[0].get("id")
+        except Exception:
+            pass
 
-        raise ValueError("No delivery address available. Please provide an address_id.")
+        from app.db.repositories import AddressRepository
+        active = await AddressRepository.get_active_address(user_id)
+        return active.get("id", "addr_home_1") if active else "addr_home_1"
 
-    async def get_payment_options(self, address_id: Optional[str] = None) -> PaymentOptionsResponse:
+    async def get_payment_options(self, address_id: Optional[str] = None, user_id: str = "user_default") -> PaymentOptionsResponse:
         """Fetches live payment options (UPI apps, QR, COD) from Swiggy MCP."""
-        resolved_address_id = await self._resolve_address_id(address_id)
-        res = await mcp_client.call_tool("get_payment_options", {"addressId": resolved_address_id})
+        resolved_address_id = await self._resolve_address_id(address_id, user_id=user_id)
+        res = await mcp_client.call_tool("get_payment_options", {"addressId": resolved_address_id}, user_id=user_id)
         structured = res.get("structuredContent", {})
 
         payment_amount = float(structured.get("paymentAmount") or 0.0)

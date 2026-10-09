@@ -4,6 +4,7 @@ from app.services.cart_service import cart_service
 from app.schemas.cart import UpdateCartRequest, ApplyCouponRequest
 from app.mcp.exceptions import MCPAuthenticationError, MCPConnectionError, MCPToolError
 from app.schemas.common import APIResponse
+from app.core.dependencies import get_current_user_id
 
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
@@ -17,8 +18,9 @@ async def get_cart(
     Phase 8: Retrieve the current live food cart and pricing breakdown from Swiggy MCP.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        data = await cart_service.get_cart(address_id=address_id)
+        data = await cart_service.get_cart(address_id=address_id, user_id=user_id)
         msg = "Cart is empty." if data.is_empty else f"Cart retrieved with {data.item_count} items."
         return APIResponse(
             success=True,
@@ -44,8 +46,9 @@ async def update_cart(
     Note: Setting quantity to 0 removes the item from the cart.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        data = await cart_service.update_cart(cart_update)
+        data = await cart_service.update_cart(cart_update, user_id=user_id)
         return APIResponse(
             success=True,
             data=data.model_dump(),
@@ -66,8 +69,9 @@ async def flush_cart(request: Request):
     Phase 8: Clear/flush the entire food cart on Swiggy MCP.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        await cart_service.flush_cart()
+        await cart_service.flush_cart(user_id=user_id)
         return APIResponse(
             success=True,
             data={"cleared": True},
@@ -145,8 +149,9 @@ async def get_cart_summary(
     Phase 9: Get complete cart summary & breakdown for explicit user confirmation before order placement.
     """
     request_id = getattr(request.state, "request_id", None)
+    user_id = get_current_user_id(request)
     try:
-        data = await cart_service.get_cart_summary(address_id=address_id)
+        data = await cart_service.get_cart_summary(address_id=address_id, user_id=user_id)
         return APIResponse(
             success=True,
             data=data.model_dump(),
