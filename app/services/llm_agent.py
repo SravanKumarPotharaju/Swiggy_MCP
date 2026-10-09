@@ -649,9 +649,105 @@ You intelligently CATEGORIZE user requests and execute operations on the corresp
   - Live Tracking ("track order", "where is my food"): call `navigate_ui_tool(destination='tracking')`.
   - Checkout & Payment ("checkout", "payment", "pay now", "proceed to pay"): call `navigate_ui_tool(destination='payment_checkout')`.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. 🛡️ STRICT DOMAIN BOUNDARY & IRRELEVANT QUESTIONS POLICY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• YOUR DEDICATED DOMAIN & PURPOSE:
+  You are an AI Concierge built EXCLUSIVELY for Swiggy Food and Swiggy Instamart:
+  1) Prepared food, dishes, restaurant menus (Meghana Foods biryani, curries, starters, etc.).
+  2) Instamart grocery items & essentials (milk, bread, eggs, curd, snacks, daily staples in 10-15m).
+  3) Shopping carts (Food Cart, Instamart Cart, item additions, removals, clear cart, bill totals).
+  4) Delivery addresses (gate arrival, home, work, address switching).
+  5) Live order tracking, rider contact, ETA updates.
+  6) Secure UPI payments & UI navigation.
+
+• MANDATORY RULE FOR IRRELEVANT / OUT-OF-SCOPE QUESTIONS:
+  If a user asks ANY question or makes ANY request that is NOT related to food, restaurants, groceries, shopping carts, addresses, delivery tracking, or Swiggy services:
+  Examples of IRRELEVANT questions:
+  - Coding, programming, debugging, writing code, algorithms, tech tutorials.
+  - Mathematics, physics, chemistry, biology, academic homework.
+  - Politics, elections, world leaders, geopolitical commentary.
+  - Stock markets, cryptocurrency, finance, investing.
+  - Medical advice, drug prescriptions, legal advice.
+  - General trivia, history, geography, movies, sports match scores, celebrity gossip.
+  - Philosophy, relationship/dating advice, general conversation outside food.
+
+• HOW YOU MUST RESPOND TO IRRELEVANT QUESTIONS:
+  - NEVER attempt to answer the irrelevant question.
+  - Politely and warmly explain that you are NOT dedicated to this topic.
+  - Reaffirm your dedicated purpose as a food & grocery concierge, and invite the user to order food or groceries instead.
+  - Example polite response format:
+    "I'm sorry, but I am dedicated specifically to helping you with Swiggy food orders, Instamart groceries, and delivery tracking. I am not dedicated to this topic. 😊
+
+    However, I would love to help you order some delicious meals (like Meghana Biryani) or get fresh groceries delivered in 10–15 minutes! What can I help you order today? 🍛⚡"
+  - For Hindi questions, reply politely in Hindi:
+    "माफ़ कीजिए, मैं केवल स्विगी फ़ूड और इंस्टामार्ट ग्रॉसरी ऑर्डर करने और डिलीवरी ट्रैक करने के लिए समर्पित हूँ। मैं इस विषय में सहायता नहीं कर सकता। क्या मैं आपके लिए कोई स्वादिष्ट भोजन या ग्रॉसरी ऑर्डर करने में मदद करूँ? 🍛⚡"
+  - ALWAYS maintain a polite, respectful, and helpful tone. Never be dismissive.
+
 Keep responses polite, concise, structured, and helpful. Support Hindi/English naturally.
 """
 
+
+def check_irrelevant_query(text: str) -> Optional[str]:
+    """
+    Checks if a query is clearly irrelevant to food, groceries, restaurants, delivery, and Swiggy.
+    Returns the category name (e.g. 'coding and software development', 'mathematics', 'politics')
+    or None if it should be processed normally.
+    """
+    if not text:
+        return None
+
+    txt = text.strip().lower()
+
+    # Greetings, self-identifications, and general polite phrases are relevant concierge conversation
+    greetings = {"hi", "hello", "hey", "namaste", "good morning", "good evening", "good afternoon", "who are you", "what can you do", "help", "menu"}
+    if txt in greetings or any(txt.startswith(g) for g in ["who are you", "what can you do", "help me"]):
+        return None
+
+    # Never flag queries mentioning food/grocery/delivery keywords
+    food_whitelist = {
+        "food", "eat", "hungry", "order", "dish", "biryani", "rice", "curry", "roti", "naan", "chicken",
+        "paneer", "veg", "non-veg", "meal", "restaurant", "meghana", "menu", "drink", "starter", "gravy",
+        "grocery", "groceries", "instamart", "milk", "bread", "egg", "curd", "dahi", "butter", "cheese",
+        "snack", "chips", "biscuit", "tea", "coffee", "water", "maggi", "noodle", "oil", "atta", "fruit",
+        "vegetable", "cart", "checkout", "pay", "payment", "upi", "qr", "address", "track", "tracking",
+        "rider", "driver", "deliver", "delivery", "swiggy", "gate", "rajajinagar", "spice", "spicy"
+    }
+    words = set(re.findall(r'[a-zA-Z]+', txt))
+    if words.intersection(food_whitelist):
+        return None
+
+    # 1. Coding & Programming
+    if re.search(r'\b(write|create|debug|generate|fix|explain)\s+(a\s+)?(python|java|javascript|c\+\+|rust|html|css|sql|react|code|script|algorithm|regex|function|class|program)\b', txt) or \
+       re.search(r'\b(leetcode|github|stackoverflow|docker|kubernetes|aws|pull\s+request|git\s+commit|compile|syntax\s+error)\b', txt) or \
+       re.search(r'^(write|show)\s+(me\s+)?(code|python|java|c\+\+|javascript)\b', txt):
+        return "coding and software development"
+
+    # 2. Math & Science Homework
+    if re.search(r'\b(solve|calculate|differentiate|integrate|evaluate)\s+.*([0-9\+\-\*\/\^\=]|equation|integral|derivative)\b', txt) or \
+       re.search(r'\b(pythagorean|quantum\s+physics|thermodynamics|newton\'?s\s+law|general\s+relativity|calculus|algebra)\b', txt) or \
+       re.search(r'^\s*what\s+is\s+[0-9]+\s*[\+\-\*\/x]\s*[0-9]+', txt):
+        return "mathematics and academic homework"
+
+    # 3. Politics & Elections
+    if re.search(r'\b(election|prime\s+minister|president|parliament|congress\s+party|bjp|democrat|republican|political\s+party|geopolitics|narendra\s+modi|donald\s+trump|vladimir\s+putin|joe\s+biden)\b', txt):
+        return "politics and world affairs"
+
+    # 4. Stock Market, Crypto & Finance
+    if re.search(r'\b(stock\s+market|cryptocurrency|crypto|bitcoin|ethereum|nifty\s*50|sensex|share\s+price|invest\s+in|mutual\s+funds|trading\s+strategy)\b', txt):
+        return "financial and investment advice"
+
+    # 5. General Non-Food Trivia & Pop Culture
+    if re.search(r'\b(who\s+won\s+the\s+(cricket\s+)?world\s+cup|ipl\s+match|fifa\s+world\s+cup|olympic\s+gold|box\s+office|movie\s+review)\b', txt) or \
+       re.search(r'\b(who\s+was\s+(napoleon|albert\s+einstein|cleopatra|alexander\s+the\s+great|george\s+washington|julius\s+caesar))\b', txt) or \
+       re.search(r'\bcapital\s+of\s+(france|germany|usa|australia|russia|japan|china|canada|italy|spain|brazil|egypt)\b', txt):
+        return "general trivia and world history"
+
+    # 6. Medical/Legal Advice
+    if re.search(r'\b(medical\s+advice|legal\s+advice|how\s+to\s+cure|symptoms\s+of|diagnose\s+me|prescribe\s+medicine|file\s+a\s+lawsuit)\b', txt):
+        return "medical or legal consultations"
+
+    return None
 
 
 class LLMAgent:
@@ -1037,6 +1133,21 @@ class LLMAgent:
                         "order": None,
                         "updated_address": None,
                     }
+
+        # Check if the query is clearly irrelevant / out-of-scope
+        if text_message:
+            irrelevant_topic = check_irrelevant_query(text_message)
+            if irrelevant_topic:
+                return {
+                    "reply": (
+                        f"I'm sorry, but I am dedicated specifically to helping you with Swiggy food orders, "
+                        f"Instamart groceries, and delivery tracking. I am not dedicated to {irrelevant_topic}. 😊\n\n"
+                        f"However, I would love to help you order delicious meals (like Meghana Biryani) or get fresh groceries "
+                        f"delivered to your door in 10–15 minutes! What can I help you order today? 🍛⚡"
+                    ),
+                    "order": None,
+                    "updated_address": None,
+                }
 
         global _main_loop
         _main_loop = asyncio.get_running_loop()

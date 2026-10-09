@@ -164,15 +164,7 @@ async def direct_connect(request: Request):
     Swiggy OAuth 2.1 + PKCE flow and returns the same payload as GET /auth/login. A session is
     only stored by /auth/callback or /auth/verify-otp, from a token Swiggy issued.
     """
-    request_id = getattr(request.state, "request_id", None)
-    user_id = get_current_user_id(request)
-    res = await auth_service.connect_direct(user_id=user_id)
-    return APIResponse(
-        success=True,
-        data=res,
-        message="Swiggy connected successfully!",
-        request_id=request_id,
-    )
+    return await login(request)
 
 
 @router.post("/logout", response_model=APIResponse)

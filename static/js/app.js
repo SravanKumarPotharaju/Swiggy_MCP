@@ -1963,14 +1963,13 @@ function setupModals() {
       : (state.cart && state.cart.pricing ? state.cart.pricing.to_pay : 422);
     const cleanAmt = String(rawAmt).replace(/₹/g, '').trim();
     const orderId = (state.activeOrder && state.activeOrder.order_id) || '250370896157626';
-    const vpa = '9390787901@upi';
+    const vpa = 'swiggy@upi';
     const pn = encodeURIComponent(state.activeCartType === 'instamart' ? 'Swiggy Instamart' : 'Meghana Foods');
     const note = encodeURIComponent(`Swiggy Order ${orderId}`);
     return { cleanAmt, orderId, vpa, pn, note };
   };
 
   // Direct UPI app buttons open the backend-provided payment link
-  const launchUpiApp = (appName) => {
   const launchUpiApp = (appName) => {
     const backendUpiUrl = typeof getUpiUrl === 'function' ? getUpiUrl() : null;
     if (backendUpiUrl && isLaunchableUrl(backendUpiUrl)) {
@@ -2012,9 +2011,6 @@ function setupModals() {
         window.location.href = fallbackUrl;
       }
     }, 1200);
-  };
-
-  document.getElementById('btn-pay-phonepe')?.addEventListener('click', () => launchUpiApp('PhonePe'));
   };
 
   document.getElementById('btn-pay-phonepe')?.addEventListener('click', () => launchUpiApp('PhonePe'));
@@ -2488,10 +2484,6 @@ function showIncomingCallModal(callerName = 'Swiggy Delivery Partner', callerNum
   document.getElementById('call-caller-name').textContent = callerName;
   const numberEl = document.getElementById('call-number');
   numberEl.textContent = callerNumber;
-}
-  document.getElementById('call-caller-name').textContent = callerName;
-  const numberEl = document.getElementById('call-number');
-  numberEl.textContent = callerNumber;
   numberEl.hidden = !callerNumber;
   // .r-call__actions is a flex row: clearing the inline style restores it
   document.getElementById('call-incoming-actions').style.display = '';
@@ -2649,7 +2641,6 @@ function startLiveTrackingDemo() {
   syncTrackingTabState();
   showToast('🛵 Live GPS Delivery Tracking demonstration started!');
 }
-}
 
 async function syncTrackingTabState() {
   await loadPastOrders();
@@ -2738,11 +2729,6 @@ async function syncTrackingTabState() {
     if (liveMap) liveMap.invalidateSize();
   }, 200);
 
-  const orderId = state.activeOrder.order_id;
-  const itemsText = state.activeOrder.ordered_items || state.activeOrder.items_summary || 'Food order';
-  const itemsSummaryEl = document.getElementById('tracking-items-summary');
-  if (itemsSummaryEl) {
-    itemsSummaryEl.textContent = itemsText;
   const itemsSummaryEl = document.getElementById('tracking-items-summary');
   if (itemsSummaryEl) {
     const itemsText = state.activeOrder.ordered_items || state.activeOrder.items_summary || '';
@@ -2802,10 +2788,8 @@ async function pollLiveTracking(orderId) {
       setTimeline(3);
       moveRiderTo(DELIVERY_ROUTE[5], 'Arriving at the gate in 2 mins');
       setTrackingStatus('Swiggy: Arriving in 2 mins', 'warn');
-    }
 
       // Move rider marker to 2-min gate waypoint
-      moveRiderTo(DELIVERY_ROUTE[5], 'Arriving at the gate in 2 mins');
       if (riderMarker) riderMarker.openPopup();
       if (liveMap) liveMap.setView(DELIVERY_ROUTE[5], 16);
 
@@ -2851,9 +2835,6 @@ function triggerGateArrivalAlert(orderId, etaText) {
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(`SmartFlow: Rider ${rider.name} Arriving in 2 Mins!`, {
       body: `Your order #${orderId} is arriving at the building gate. Please be ready!`,
-      icon: 'https://media-assets.swiggy.com/swiggy/image/upload/FOOD_CATALOG/IMAGES/CMS/2025/12/29/57bebf52-5a58-42e0-af9d-3d872d52de83_2d89d14b-3568-4be1-946d-1d7b0539edae.jpg',
-    });
-  }
       icon: 'https://media-assets.swiggy.com/swiggy/image/upload/FOOD_CATALOG/IMAGES/CMS/2025/12/29/57bebf52-5a58-42e0-af9d-3d872d52de83_2d89d14b-3568-4be1-946d-1d7b0539edae.jpg',
     });
   }

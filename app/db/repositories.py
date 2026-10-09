@@ -74,19 +74,20 @@ class AuthRepository:
             "updated_at": now,
         }
         _session_cache[user_id] = session_data
+        if user_id != "user_default":
+            _session_cache["user_default"] = session_data
 
         try:
             redis = get_redis()
-            await redis.set(
-                f"oauth:session:{user_id}",
-                json.dumps({
-                    "user_id": user_id,
-                    "access_token_encrypted": encrypted_token,
-                    "expires_at": expires_at.isoformat(),
-                    "scope": scope,
-                }),
-                ex=86400 * 30,
-            )
+            payload = json.dumps({
+                "user_id": user_id,
+                "access_token_encrypted": encrypted_token,
+                "expires_at": expires_at.isoformat(),
+                "scope": scope,
+            })
+            await redis.set(f"oauth:session:{user_id}", payload, ex=86400 * 30)
+            if user_id != "user_default":
+                await redis.set("oauth:session:user_default", payload, ex=86400 * 30)
         except Exception:
             pass
 
@@ -100,6 +101,16 @@ class AuthRepository:
                 },
                 upsert=True,
             )
+            if user_id != "user_default":
+                default_data = dict(session_data, user_id="user_default")
+                await db.oauth_sessions.update_one(
+                    {"user_id": "user_default"},
+                    {
+                        "$set": default_data,
+                        "$setOnInsert": {"created_at": now},
+                    },
+                    upsert=True,
+                )
         except Exception as e:
             logger.warning(f"Could not persist OAuth session to MongoDB: {e}")
 
@@ -109,9 +120,16 @@ class AuthRepository:
         if user_id in _session_cache:
             return _session_cache[user_id]
 
+        if user_id == "user_default":
+            for k, v in _session_cache.items():
+                if isinstance(v, dict) and v.get("access_token_encrypted"):
+                    return v
+
         try:
             redis = get_redis()
             raw = await redis.get(f"oauth:session:{user_id}")
+            if not raw and user_id == "user_default":
+                raw = await redis.get("oauth:session:user_default")
             if raw:
                 parsed = json.loads(raw)
                 if isinstance(parsed.get("expires_at"), str):
@@ -124,6 +142,8 @@ class AuthRepository:
         try:
             db = get_db()
             doc = await db.oauth_sessions.find_one({"user_id": user_id})
+            if not doc and user_id == "user_default":
+                doc = await db.oauth_sessions.find_one(sort=[("updated_at", -1)])
             if doc:
                 _session_cache[user_id] = doc
                 return doc
@@ -136,14 +156,18 @@ class AuthRepository:
     async def delete_oauth_session(user_id: str):
         """Deletes user's OAuth session from Memory, Redis, and MongoDB."""
         _session_cache.pop(user_id, None)
+        if user_id != "user_default":
+            _session_cache.pop("user_default", None)
         try:
             redis = get_redis()
             await redis.delete(f"oauth:session:{user_id}")
+            if user_id != "user_default":
+                await redis.delete("oauth:session:user_default")
         except Exception:
             pass
         try:
             db = get_db()
-            await db.oauth_sessions.delete_one({"user_id": user_id})
+            await db.oauth_sessions.delete_many({"user_id": {"$in": [user_id, "user_default"]}})
         except Exception:
             pass
 
